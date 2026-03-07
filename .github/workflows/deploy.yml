@@ -21,3 +21,15 @@ jobs:
         run: |
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/test-backend:latest .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/test-backend:latest
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/test-backend:latest
+            sudo docker stop test-backend || true
+            sudo docker rm test-backend || true
+            sudo docker run -d -p 8000:8000 --name test-backend ${{ secrets.DOCKERHUB_USERNAME }}/test-backend:latest
