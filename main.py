@@ -34,20 +34,44 @@ def db_test():
         conn.close()
 
 
+def get_spark():
+    #hive경로 
+    return SparkSession.builder \
+        .appName("test") \
+        .master("local[*]") \
+        .config("spark.sql.warehouse.dir", "hdfs://hdfs-test-namenode:9000/user/hive/warehouse") \
+        .config("hive.metastore.uris", "thrift://hive-metastore:9083") \
+        .enableHiveSupport() \
+        .getOrCreate()
+
+
 @router.get("/hdfs-write")
 def hdfs_write():
     try:
-        spark = SparkSession.builder \
-            .appName("test-write") \
-            .master("local[*]") \
-            .getOrCreate()
+        spark = get_spark()
         data = [("jihee", 1), ("test", 2)]
         df = spark.createDataFrame(data, ["name", "id"])
-        df.write.mode("overwrite").parquet("hdfs://hdfs-test:9000/test/sample.parquet")
+        path = "hdfs://hdfs-test-namenode:9000/test/sample.parquet" #테이블 저장 경로, 내맘대로 가능 
+        df.write.mode("overwrite").parquet(path)
+        spark.sql("CREATE DATABASE IF NOT EXISTS test")
+        spark.sql("DROP TABLE IF EXISTS test.sample")
+        spark.sql(f"CREATE TABLE test.sample (name STRING, id BIGINT) USING parquet LOCATION '{path}'")
         spark.stop()
-        return {"status": "success", "path": "hdfs://hdfs-test:9000/test/sample.parquet"}
+        return {"status": "success", "path": path}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 
+@router.get("/hdfs-get")
+def hdfs_get():
+    try:
+        spark = get_spark()
+        df = spark.sql("SELECT * FROM test.sample LIMIT 1")
+        result = [row.asDict() for row in df.collect()]
+        print(f"dicts ~~ {result}")
+        spark.stop()
+        return {"status": "success", "data": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    
 app.include_router(router)
