@@ -53,7 +53,7 @@ def hdfs_write():
         df = spark.createDataFrame(data, ["name", "id"])
         path = "hdfs://hdfs-test-namenode:9000/test/sample.parquet" #테이블 저장 경로, 내맘대로 가능 
         df.write.mode("overwrite").parquet(path)
-        spark.sql("CREATE DATABASE IF NOT EXISTS test")
+        
         spark.sql("DROP TABLE IF EXISTS test.sample")
         spark.sql(f"CREATE TABLE test.sample (name STRING, id BIGINT) USING parquet LOCATION '{path}'")
         spark.stop()
@@ -67,10 +67,11 @@ def hdfs_get():
     try:
         spark = get_spark()
         df = spark.sql("SELECT * FROM test.sample LIMIT 1")
-        result = [row.asDict() for row in df.collect()]
-        print(f"dicts ~~ {result}")
+        data = [row.asDict() for row in df.collect()]
+        print(f"dicts ~~ {data}")
         spark.stop()
-        return {"status": "success", "data": result}
+        name_data=data[0]['name']
+        return {"status": "success", "data": name_data}
     except Exception as e:
         return {"status": "error", "message": str(e)}
     
