@@ -18,7 +18,7 @@ def get_connection():
 
 @router.get("/hello")
 def hello():
-    return {"message": "Hello, World!"}
+    return {"message": "Hello, World 22!"}
 
 
 @router.get("/db-test")
