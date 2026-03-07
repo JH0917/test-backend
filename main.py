@@ -1,5 +1,6 @@
 from fastapi import FastAPI, APIRouter
 import pymysql
+from pyspark.sql import SparkSession
 
 app = FastAPI()
 router = APIRouter(prefix="/api_ljh")
@@ -31,6 +32,22 @@ def db_test():
         return {"name": name_result, "host": DB_CONFIG["host"]}
     finally:
         conn.close()
+
+
+@router.get("/hdfs-write")
+def hdfs_write():
+    try:
+        spark = SparkSession.builder \
+            .appName("test-write") \
+            .master("local[*]") \
+            .getOrCreate()
+        data = [("jihee", 1), ("test", 2)]
+        df = spark.createDataFrame(data, ["name", "id"])
+        df.write.mode("overwrite").parquet("hdfs://hdfs-test:9000/test/sample.parquet")
+        spark.stop()
+        return {"status": "success", "path": "hdfs://hdfs-test:9000/test/sample.parquet"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 
 app.include_router(router)
