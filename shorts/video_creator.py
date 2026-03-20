@@ -226,32 +226,30 @@ def _ken_burns_clip(img_path: str, duration: float, index: int) -> ImageClip:
         start_scale = 1.0 / margin
         end_scale = 1.0
 
-    def make_frame_transform(get_frame):
-        def new_get_frame(t):
-            frame = get_frame(t)
-            progress = t / duration if duration > 0 else 0
-            scale = start_scale + (end_scale - start_scale) * progress
+    def ken_burns_transform(get_frame, t):
+        frame = get_frame(t)
+        progress = t / duration if duration > 0 else 0
+        scale = start_scale + (end_scale - start_scale) * progress
 
-            h, w = frame.shape[:2]
-            new_w = int(WIDTH / scale)
-            new_h = int(HEIGHT / scale)
-            cx, cy = w // 2, h // 2
+        h, w = frame.shape[:2]
+        new_w = int(WIDTH / scale)
+        new_h = int(HEIGHT / scale)
+        cx, cy = w // 2, h // 2
 
-            x1 = max(0, cx - new_w // 2)
-            y1 = max(0, cy - new_h // 2)
-            x2 = min(w, x1 + new_w)
-            y2 = min(h, y1 + new_h)
+        x1 = max(0, cx - new_w // 2)
+        y1 = max(0, cy - new_h // 2)
+        x2 = min(w, x1 + new_w)
+        y2 = min(h, y1 + new_h)
 
-            cropped = frame[y1:y2, x1:x2]
+        cropped = frame[y1:y2, x1:x2]
 
-            from PIL import Image as PILImage
-            import numpy as np
-            pil_img = PILImage.fromarray(cropped)
-            pil_img = pil_img.resize((WIDTH, HEIGHT), PILImage.LANCZOS)
-            return np.array(pil_img)
-        return new_get_frame
+        from PIL import Image as PILImage
+        import numpy as np
+        pil_img = PILImage.fromarray(cropped)
+        pil_img = pil_img.resize((WIDTH, HEIGHT), PILImage.LANCZOS)
+        return np.array(pil_img)
 
-    clip = clip.transform(make_frame_transform)
+    clip = clip.transform(ken_burns_transform)
     return clip
 
 
