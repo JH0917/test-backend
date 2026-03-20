@@ -11,8 +11,6 @@ from moviepy import (
     ImageClip,
     AudioFileClip,
     CompositeVideoClip,
-    concatenate_videoclips,
-    ColorClip,
     vfx,
 )
 from PIL import Image, ImageDraw, ImageFont
@@ -231,55 +229,6 @@ def _create_text_image(text: str, run_id: str, index: int, width: int = WIDTH, h
     return path
 
 
-def _ken_burns_clip(img_path: str, duration: float, index: int) -> ImageClip:
-    """Ken Burns 효과: 이미지를 살짝 줌인/줌아웃하며 패닝하는 움직이는 효과."""
-    img = Image.open(img_path).convert("RGB")
-    # 이미지를 약간 크게 리사이즈 (줌/패닝 여유)
-    margin = 1.15
-    big_w = int(WIDTH * margin)
-    big_h = int(HEIGHT * margin)
-    img = img.resize((big_w, big_h), Image.LANCZOS)
-
-    big_path = img_path.replace(".png", "_big.png").replace(".jpg", "_big.jpg")
-    img.save(big_path)
-
-    clip = ImageClip(big_path).with_duration(duration)
-
-    # 짝수 장면: 줌인 (넓게 → 좁게), 홀수 장면: 줌아웃 (좁게 → 넓게)
-    if index % 2 == 0:
-        start_scale = 1.0
-        end_scale = 1.0 / margin
-    else:
-        start_scale = 1.0 / margin
-        end_scale = 1.0
-
-    def ken_burns_transform(get_frame, t):
-        frame = get_frame(t)
-        progress = t / duration if duration > 0 else 0
-        scale = start_scale + (end_scale - start_scale) * progress
-
-        h, w = frame.shape[:2]
-        new_w = int(WIDTH / scale)
-        new_h = int(HEIGHT / scale)
-        cx, cy = w // 2, h // 2
-
-        x1 = max(0, cx - new_w // 2)
-        y1 = max(0, cy - new_h // 2)
-        x2 = min(w, x1 + new_w)
-        y2 = min(h, y1 + new_h)
-
-        cropped = frame[y1:y2, x1:x2]
-
-        from PIL import Image as PILImage
-        import numpy as np
-        pil_img = PILImage.fromarray(cropped)
-        pil_img = pil_img.resize((WIDTH, HEIGHT), PILImage.LANCZOS)
-        return np.array(pil_img)
-
-    clip = clip.transform(ken_burns_transform)
-    return clip
-
-
 async def _compose_video(script: dict, tts_path: str, image_paths: list[str]) -> str:
     """MoviePy로 장면들을 합성해 최종 영상을 만든다."""
     run_id = uuid.uuid4().hex[:8]
@@ -291,7 +240,7 @@ async def _compose_video(script: dict, tts_path: str, image_paths: list[str]) ->
     total_scene_duration = sum(s["duration"] for s in scenes)
     ratio = total_duration / total_scene_duration if total_scene_duration > 0 else 1
 
-    fade_duration = 0.4
+    fade_duration = 0.3
     clips = []
     current_time = 0
 
@@ -299,8 +248,7 @@ async def _compose_video(script: dict, tts_path: str, image_paths: list[str]) ->
         duration = scene["duration"] * ratio
         img_path = image_paths[i] if i < len(image_paths) else image_paths[-1]
 
-        # Ken Burns 효과 (살짝 움직이는 느낌)
-        bg = _ken_burns_clip(img_path, duration, i)
+        bg = ImageClip(img_path).resized((WIDTH, HEIGHT)).with_duration(duration)
 
         # 크로스페이드
         if i > 0:
@@ -310,8 +258,6 @@ async def _compose_video(script: dict, tts_path: str, image_paths: list[str]) ->
 
         text_img_path = _create_text_image(scene["text"], run_id, i)
         text_overlay = ImageClip(text_img_path).with_duration(duration)
-        # 텍스트도 페이드인
-        text_overlay = text_overlay.with_effects([vfx.CrossFadeIn(0.3)])
 
         composite = CompositeVideoClip([bg, text_overlay], size=(WIDTH, HEIGHT))
         composite = composite.with_start(current_time)
