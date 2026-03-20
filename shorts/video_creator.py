@@ -64,19 +64,22 @@ async def _generate_script(topic: str, detail: str) -> dict:
 - 미래 역사학자가 과거(현재)를 연구하면서 진지하게 분석하는데, 우리 입장에서 보면 어이없고 웃긴 것
 - 좋은 예시: "이 시대 인류는 하루 평균 7시간을 15cm 유리판에 바쳤습니다. 식사 중에도, 심지어 배변 활동 중에도요. 학계에서는 이를 '자발적 뇌 위탁 현상'으로 분류하고 있습니다"
 - 또 다른 예시: "옛날 사람들은 완전히 멘탈이 나가버렸습니다. 잠을 자야 하는 시간에 다른 사람이 잠자는 영상을 봤습니다"
+- 또: "이들은 '좋아요'라는 가상의 숫자를 받기 위해 음식이 식을 때까지 각도를 맞춰 사진을 찍었습니다. 배고프면 그냥 먹으면 되는데요."
 - **과장된 리액션 금지**. 담담하게, 학술적으로 말하되 내용이 웃겨야 함.
+- 미래인이 만든 용어를 창의적으로 만들어 넣을 것 (예: '자발적 뇌 위탁', '디지털 수면 장애', '가상 승인 중독')
 
 ## 나레이션 규칙
 - 하나의 이야기처럼 자연스럽게 이어져야 함 (장면별로 끊기면 안 됨)
 - 말투: 차분한 다큐 나레이션. 진지할수록 좋음. 내용으로 웃기는 것.
 - 첫 문장에서 바로 시선을 잡을 것 (충격적이지만 담담하게 던지는 사실)
+- 마지막에 다음 편 궁금하면 팔로우 유도
 
 ## 구성
-- 총 20초 내외 영상
-- 4~5개 장면
+- 총 25~30초 영상
+- 7~8개 장면으로 구성 (장면이 많을수록 역동적)
+- 각 장면 2~4초
 - 각 장면에 화면에 표시할 짧은 텍스트(15자 이내)
-- 각 장면에 DALL-E용 일러스트 배경 설명 (영어)
-- 마지막에 "다음 편도 궁금하면 팔로우!" 식 유도 문구
+- 각 장면에 DALL-E용 일러스트 배경 설명 (영어, 장면마다 다른 구도와 색감)
 - 저작권 없는 소재만 사용
 
 다음 JSON 형식으로만 응답하세요:
@@ -88,8 +91,8 @@ async def _generate_script(topic: str, detail: str) -> dict:
     "scenes": [
         {{
             "text": "화면에 표시할 텍스트",
-            "duration": 4.0,
-            "image_prompt": "Cute cartoon illustration of ... (English, describe the scene visually)"
+            "duration": 3.0,
+            "image_prompt": "Cute cartoon illustration of ... (English, specific visual scene, different angle/composition each scene)"
         }}
     ]
 }}"""
@@ -98,7 +101,7 @@ async def _generate_script(topic: str, detail: str) -> dict:
     message = await asyncio.to_thread(
         client.messages.create,
         model="claude-opus-4-20250514",
-        max_tokens=1200,
+        max_tokens=1500,
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -119,7 +122,7 @@ async def _generate_scene_images(scenes: list[dict]) -> list[str]:
     image_paths = []
 
     client = openai.OpenAI(api_key=OPENAI_API_KEY)
-    style_suffix = "Cute cartoon illustration style, vibrant colors, expressive and funny, suitable for YouTube Shorts vertical video background. No text in the image."
+    style_suffix = "Cute cartoon illustration style, vibrant colors, expressive and funny, soft lighting, detailed background. No text or letters in the image."
 
     for i, scene in enumerate(scenes):
         try:
@@ -164,7 +167,6 @@ def _create_text_image(text: str, run_id: str, index: int, width: int = WIDTH, h
     img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # 한글 폰트 로드
     font_paths = [
         "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
         "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
@@ -173,7 +175,7 @@ def _create_text_image(text: str, run_id: str, index: int, width: int = WIDTH, h
     font = None
     for fp in font_paths:
         if os.path.exists(fp):
-            font = ImageFont.truetype(fp, 48)
+            font = ImageFont.truetype(fp, 44)
             break
     if font is None:
         font = ImageFont.load_default()
@@ -187,19 +189,70 @@ def _create_text_image(text: str, run_id: str, index: int, width: int = WIDTH, h
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
     x = (width - text_w) // 2
-    y = height - text_h - 180
+    y = height - text_h - 160
 
-    padding = 25
+    padding = 20
     draw.rounded_rectangle(
         [x - padding, y - padding, x + text_w + padding, y + text_h + padding],
-        radius=15,
-        fill=(0, 0, 0, 160),
+        radius=12,
+        fill=(0, 0, 0, 150),
     )
     draw.text((x, y), text, font=font, fill=(255, 255, 255, 255))
 
     path = os.path.join(tempfile.gettempdir(), f"shorts_text_{run_id}_{index}.png")
     img.save(path)
     return path
+
+
+def _ken_burns_clip(img_path: str, duration: float, index: int) -> ImageClip:
+    """Ken Burns 효과: 이미지를 살짝 줌인/줌아웃하며 패닝하는 움직이는 효과."""
+    img = Image.open(img_path).convert("RGB")
+    # 이미지를 약간 크게 리사이즈 (줌/패닝 여유)
+    margin = 1.15
+    big_w = int(WIDTH * margin)
+    big_h = int(HEIGHT * margin)
+    img = img.resize((big_w, big_h), Image.LANCZOS)
+
+    big_path = img_path.replace(".png", "_big.png").replace(".jpg", "_big.jpg")
+    img.save(big_path)
+
+    clip = ImageClip(big_path).with_duration(duration)
+
+    # 짝수 장면: 줌인 (넓게 → 좁게), 홀수 장면: 줌아웃 (좁게 → 넓게)
+    if index % 2 == 0:
+        start_scale = 1.0
+        end_scale = 1.0 / margin
+    else:
+        start_scale = 1.0 / margin
+        end_scale = 1.0
+
+    def make_frame_transform(get_frame):
+        def new_get_frame(t):
+            frame = get_frame(t)
+            progress = t / duration if duration > 0 else 0
+            scale = start_scale + (end_scale - start_scale) * progress
+
+            h, w = frame.shape[:2]
+            new_w = int(WIDTH / scale)
+            new_h = int(HEIGHT / scale)
+            cx, cy = w // 2, h // 2
+
+            x1 = max(0, cx - new_w // 2)
+            y1 = max(0, cy - new_h // 2)
+            x2 = min(w, x1 + new_w)
+            y2 = min(h, y1 + new_h)
+
+            cropped = frame[y1:y2, x1:x2]
+
+            from PIL import Image as PILImage
+            import numpy as np
+            pil_img = PILImage.fromarray(cropped)
+            pil_img = pil_img.resize((WIDTH, HEIGHT), PILImage.LANCZOS)
+            return np.array(pil_img)
+        return new_get_frame
+
+    clip = clip.transform(make_frame_transform)
+    return clip
 
 
 async def _compose_video(script: dict, tts_path: str, image_paths: list[str]) -> str:
@@ -213,7 +266,7 @@ async def _compose_video(script: dict, tts_path: str, image_paths: list[str]) ->
     total_scene_duration = sum(s["duration"] for s in scenes)
     ratio = total_duration / total_scene_duration if total_scene_duration > 0 else 1
 
-    fade_duration = 0.5
+    fade_duration = 0.4
     clips = []
     current_time = 0
 
@@ -221,9 +274,10 @@ async def _compose_video(script: dict, tts_path: str, image_paths: list[str]) ->
         duration = scene["duration"] * ratio
         img_path = image_paths[i] if i < len(image_paths) else image_paths[-1]
 
-        bg = ImageClip(img_path).resized((WIDTH, HEIGHT)).with_duration(duration)
+        # Ken Burns 효과 (살짝 움직이는 느낌)
+        bg = _ken_burns_clip(img_path, duration, i)
 
-        # 크로스페이드: 페이드인/아웃 적용
+        # 크로스페이드
         if i > 0:
             bg = bg.with_effects([vfx.CrossFadeIn(fade_duration)])
         if i < len(scenes) - 1:
@@ -231,12 +285,13 @@ async def _compose_video(script: dict, tts_path: str, image_paths: list[str]) ->
 
         text_img_path = _create_text_image(scene["text"], run_id, i)
         text_overlay = ImageClip(text_img_path).with_duration(duration)
+        # 텍스트도 페이드인
+        text_overlay = text_overlay.with_effects([vfx.CrossFadeIn(0.3)])
 
         composite = CompositeVideoClip([bg, text_overlay], size=(WIDTH, HEIGHT))
         composite = composite.with_start(current_time)
         clips.append(composite)
 
-        # 다음 장면은 fade_duration만큼 겹침
         if i < len(scenes) - 1:
             current_time += duration - fade_duration
         else:
