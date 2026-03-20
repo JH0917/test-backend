@@ -1,8 +1,20 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter
 import pymysql
 from pyspark.sql import SparkSession
 
-app = FastAPI()
+from shorts.router import router as shorts_router
+from shorts.scheduler import start_scheduler, stop_scheduler
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    start_scheduler()
+    yield
+    stop_scheduler()
+
+
+app = FastAPI(lifespan=lifespan)
 router = APIRouter(prefix="/api_ljh")
 
 DB_CONFIG = {
@@ -76,3 +88,4 @@ def hdfs_get():
         return {"status": "error", "message": str(e)}
     
 app.include_router(router)
+app.include_router(shorts_router)

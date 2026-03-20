@@ -32,4 +32,12 @@ jobs:
             sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/test-backend:latest
             sudo docker stop test-backend || true
             sudo docker rm test-backend || true
-            sudo docker run -d -p 8000:8000 --name test-backend ${{ secrets.DOCKERHUB_USERNAME }}/test-backend:latest
+            echo '${{ secrets.YOUTUBE_TOKEN_JSON }}' | sudo tee /home/ec2-user/youtube_token.json > /dev/null
+            sudo chmod 600 /home/ec2-user/youtube_token.json
+            sudo docker run -d -p 8000:8000 \
+              -e YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }} \
+              -e ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} \
+              -e PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }} \
+              -e YOUTUBE_TOKEN_PATH=/app/youtube_token.json \
+              -v /home/ec2-user/youtube_token.json:/app/youtube_token.json:ro \
+              --name test-backend ${{ secrets.DOCKERHUB_USERNAME }}/test-backend:latest
