@@ -27,8 +27,8 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 TTS_VOICE = "ko-KR-SunHiNeural"
 
-WIDTH = 1080
-HEIGHT = 1920
+WIDTH = 720
+HEIGHT = 1280
 
 # 캐시: 마지막으로 생성된 스크립트 (업로드 시 재사용)
 last_generated_script = None
@@ -119,7 +119,7 @@ async def _generate_scene_images(scenes: list[dict]) -> list[str]:
                 client.images.generate,
                 model="dall-e-3",
                 prompt=full_prompt,
-                size="1024x1792",
+                size="1024x1024",
                 quality="standard",
                 n=1,
             )
@@ -227,7 +227,7 @@ async def _compose_video(script: dict, tts_path: str, image_paths: list[str]) ->
         fps=30,
         codec="libx264",
         audio_codec="aac",
-        preset="fast",
+        preset="ultrafast",
         logger=None,
     )
 
