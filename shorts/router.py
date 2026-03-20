@@ -7,6 +7,7 @@ import shorts.video_creator as vc_module
 from shorts.trend_analyzer import analyze_youtube_trends
 from shorts.video_creator import create_shorts_video
 from shorts.youtube_uploader import upload_to_youtube
+from shorts.channel_branding import generate_channel_branding, update_youtube_channel
 
 
 class TopicRequest(BaseModel):
@@ -61,6 +62,31 @@ async def run_full_pipeline(background_tasks: BackgroundTasks):
         return {"status": "error", "message": "주제가 설정되지 않았습니다. /analyze 또는 /topic으로 먼저 설정하세요."}
     background_tasks.add_task(_full_pipeline)
     return {"status": "started", "message": f"주제 '{trend_module.current_topic_detail}'로 영상 생성이 시작되었습니다."}
+
+
+@router.post("/channel")
+async def run_channel_branding(background_tasks: BackgroundTasks):
+    """채널 브랜딩(채널명, 설명, 이미지)을 생성하고 YouTube에 업로드한다."""
+    if not trend_module.current_topic:
+        return {"status": "error", "message": "주제가 설정되지 않았습니다. /analyze 또는 /topic으로 먼저 설정하세요."}
+    background_tasks.add_task(_channel_branding_pipeline)
+    return {"status": "started", "message": "채널 브랜딩 생성 및 업로드가 시작되었습니다."}
+
+
+async def _channel_branding_pipeline():
+    """채널 브랜딩 생성 → YouTube 업로드."""
+    try:
+        branding = await generate_channel_branding()
+        logger.info(f"채널 브랜딩 생성: {branding['channel_name']}")
+
+        result = await update_youtube_channel(
+            channel_name=branding["channel_name"],
+            channel_description=branding["channel_description"],
+            image_path=branding["image_path"],
+        )
+        logger.info(f"채널 업데이트 결과: {result}")
+    except Exception as e:
+        logger.error(f"채널 브랜딩 실패: {e}", exc_info=True)
 
 
 async def _full_pipeline():

@@ -13,7 +13,7 @@ YouTube OAuth 2.0 초기 인증 스크립트.
 import json
 from google_auth_oauthlib.flow import InstalledAppFlow
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+SCOPES = ["https://www.googleapis.com/auth/youtube"]
 
 
 def main():

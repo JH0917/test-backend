@@ -26,7 +26,7 @@ def _get_authenticated_service():
         token_uri="https://oauth2.googleapis.com/token",
         client_id=token_data["client_id"],
         client_secret=token_data["client_secret"],
-        scopes=["https://www.googleapis.com/auth/youtube.upload"],
+        scopes=["https://www.googleapis.com/auth/youtube"],
     )
 
     if creds.expired or not creds.token:
