@@ -183,6 +183,8 @@ async def _select_topic_with_ai(trending_data: list[dict]) -> dict:
     "topic": "콘텐츠 포맷명 (예: 사물의 과학수업, 숫자가 말하는 세계사 등)",
     "detail": "첫 번째 에피소드 주제 (구체적으로)",
     "concept": "이 포맷의 핵심 컨셉을 한 줄로 (예: 사물의 입장에서 과학 원리를 설명한다)",
+    "channel_name": "채널명 (짧고 임팩트 있게, 자극적이거나 유머러스해도 OK)",
+    "channel_description": "채널 소개 한 줄 (호기심 자극하는 톤으로)",
     "why_repeatable": "왜 이 포맷으로 수백 편을 만들 수 있는지",
     "reason": "트렌드 분석 기반 선정 이유"
 }}"""
@@ -191,7 +193,7 @@ async def _select_topic_with_ai(trending_data: list[dict]) -> dict:
     message = await asyncio.to_thread(
         client.messages.create,
         model=MODEL,
-        max_tokens=500,
+        max_tokens=800,
         messages=[{"role": "user", "content": prompt}],
     )
 
