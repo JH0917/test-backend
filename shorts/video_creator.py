@@ -26,7 +26,7 @@ logger = logging.getLogger("shorts.video_creator")
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-TTS_VOICE = "ko-KR-SunHiNeural"
+TTS_VOICE = "ko-KR-InJoonNeural"
 
 WIDTH = 720
 HEIGHT = 1280
@@ -60,16 +60,16 @@ async def _generate_script(topic: str, detail: str) -> dict:
 이번 에피소드 주제: {detail}
 
 ## 톤 & 스타일 (매우 중요!)
-- **예능 프로그램처럼** 재미있고 과장되게. 정보 전달이 아니라 웃기는 게 목적.
-- 미래인이 현재를 보면서 **진심으로 당황하고, 어이없어하고, 웃기는** 느낌
-- 예시 톤: "아니 진짜로요? 이 시대 사람들은 하루에 7시간을 이 작은 유리판을 쳐다봤다고요? 화장실에서도요?! 역사책에 이렇게 적혀있는데 저도 처음엔 오타인 줄 알았습니다"
-- 딱딱한 설명 금지. 친구한테 얘기하듯 자연스럽고 감정이 살아있게.
-- 중간중간 웃음 포인트가 있어야 함
+- **다큐멘터리 나레이터처럼 차분하고 진지하게 말하는데, 내용 자체가 웃긴** 스타일
+- 미래 역사학자가 과거(현재)를 연구하면서 진지하게 분석하는데, 우리 입장에서 보면 어이없고 웃긴 것
+- 좋은 예시: "이 시대 인류는 하루 평균 7시간을 15cm 유리판에 바쳤습니다. 식사 중에도, 심지어 배변 활동 중에도요. 학계에서는 이를 '자발적 뇌 위탁 현상'으로 분류하고 있습니다"
+- 또 다른 예시: "옛날 사람들은 완전히 멘탈이 나가버렸습니다. 잠을 자야 하는 시간에 다른 사람이 잠자는 영상을 봤습니다"
+- **과장된 리액션 금지**. 담담하게, 학술적으로 말하되 내용이 웃겨야 함.
 
 ## 나레이션 규칙
 - 하나의 이야기처럼 자연스럽게 이어져야 함 (장면별로 끊기면 안 됨)
-- 말투: 존댓말이지만 유쾌하게. 뉴스 앵커가 아니라 예능 MC 느낌.
-- 첫 문장에서 바로 시선을 잡을 것 (질문이나 충격적 사실로 시작)
+- 말투: 차분한 다큐 나레이션. 진지할수록 좋음. 내용으로 웃기는 것.
+- 첫 문장에서 바로 시선을 잡을 것 (충격적이지만 담담하게 던지는 사실)
 
 ## 구성
 - 총 20초 내외 영상
@@ -108,12 +108,7 @@ async def _generate_script(topic: str, detail: str) -> dict:
 async def _generate_tts(narration: str) -> str:
     """edge-tts로 나레이션 음성을 생성한다."""
     tts_path = os.path.join(tempfile.gettempdir(), f"shorts_narration_{uuid.uuid4().hex[:8]}.mp3")
-    communicate = edge_tts.Communicate(
-        narration,
-        TTS_VOICE,
-        rate="+10%",
-        pitch="+5Hz",
-    )
+    communicate = edge_tts.Communicate(narration, TTS_VOICE)
     await communicate.save(tts_path)
     return tts_path
 
