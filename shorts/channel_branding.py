@@ -3,6 +3,8 @@ import json
 import asyncio
 import tempfile
 import uuid
+import math
+import random
 import httpx
 import anthropic
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
@@ -13,6 +15,15 @@ from shorts.trend_analyzer import _parse_json_response
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "")
 MODEL = "claude-opus-4-20250514"
+
+# 파스텔 컬러 팔레트
+PASTEL_PALETTES = [
+    {"bg1": (255, 182, 193), "bg2": (186, 225, 255), "accent": (255, 218, 185)},  # 핑크-블루
+    {"bg1": (200, 230, 201), "bg2": (255, 245, 157), "accent": (255, 204, 128)},  # 민트-옐로
+    {"bg1": (225, 190, 231), "bg2": (179, 229, 252), "accent": (255, 183, 197)},  # 퍼플-스카이
+    {"bg1": (255, 224, 178), "bg2": (248, 187, 208), "accent": (200, 230, 201)},  # 오렌지-핑크
+    {"bg1": (178, 235, 242), "bg2": (225, 190, 231), "accent": (255, 245, 157)},  # 시안-퍼플
+]
 
 
 async def generate_channel_branding() -> dict:
@@ -25,9 +36,9 @@ async def generate_channel_branding() -> dict:
         trend_module.current_topic_detail,
     )
 
-    bg_image = await _fetch_branding_image(branding["search_keyword"])
-    banner_path = _create_banner_image(branding["channel_name"], bg_image)
-    profile_path = _create_profile_image(branding["channel_name"], bg_image)
+    palette = random.choice(PASTEL_PALETTES)
+    banner_path = _create_banner_image(branding["channel_name"], palette)
+    profile_path = _create_profile_image(branding["channel_name"], palette)
 
     branding["banner_path"] = banner_path
     branding["profile_path"] = profile_path
@@ -44,15 +55,13 @@ async def _generate_branding_with_ai(topic: str, detail: str) -> dict:
 다음을 만들어주세요:
 1. 채널명: 짧고 임팩트 있게 (2~4단어). 자극적이거나 유머러스해도 OK. 한눈에 뭐하는 채널인지 느낌이 와야 함.
 2. 채널 설명: 한 줄로. 호기심 자극하는 톤. 구독 유도 느낌.
-3. 배경 이미지 검색 키워드: 채널 분위기에 맞는 영어 키워드 1개 (Pexels 검색용)
 
 참고 채널명 예시: 사물의 경고, 유유미미, 침착맨, 지식한입, 1분과학
 
 다음 JSON 형식으로만 응답하세요:
 {{
     "channel_name": "채널명",
-    "channel_description": "채널 소개 한 줄",
-    "search_keyword": "english keyword"
+    "channel_description": "채널 소개 한 줄"
 }}"""
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -64,30 +73,6 @@ async def _generate_branding_with_ai(topic: str, detail: str) -> dict:
     )
 
     return _parse_json_response(message.content[0].text)
-
-
-async def _fetch_branding_image(keyword: str) -> str | None:
-    """Pexels에서 브랜딩용 이미지를 1장 가져온다."""
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(
-                "https://api.pexels.com/v1/search",
-                headers={"Authorization": PEXELS_API_KEY},
-                params={"query": keyword, "per_page": 1, "orientation": "landscape"},
-            )
-            resp.raise_for_status()
-            photos = resp.json().get("photos", [])
-            if not photos:
-                return None
-
-            img_resp = await client.get(photos[0]["src"]["large2x"])
-            run_id = uuid.uuid4().hex[:8]
-            path = os.path.join(tempfile.gettempdir(), f"branding_bg_{run_id}.jpg")
-            with open(path, "wb") as f:
-                f.write(img_resp.content)
-            return path
-    except Exception:
-        return None
 
 
 def _load_font(size: int):
@@ -102,82 +87,147 @@ def _load_font(size: int):
     return ImageFont.load_default()
 
 
-def _create_banner_image(channel_name: str, bg_image_path: str | None) -> str:
-    """배너 이미지를 생성한다. (2560x1440)"""
+def _draw_pastel_gradient(img: Image.Image, color1: tuple, color2: tuple):
+    """파스텔 그라데이션 배경을 그린다."""
+    w, h = img.size
+    for y in range(h):
+        ratio = y / h
+        r = int(color1[0] + (color2[0] - color1[0]) * ratio)
+        g = int(color1[1] + (color2[1] - color1[1]) * ratio)
+        b = int(color1[2] + (color2[2] - color1[2]) * ratio)
+        for x in range(w):
+            img.putpixel((x, y), (r, g, b))
+
+
+def _draw_decorations(draw: ImageDraw.Draw, w: int, h: int, accent: tuple):
+    """귀여운 장식 요소들을 그린다 (별, 원, 하트 등)."""
+    random.seed(42)
+
+    # 둥근 도트들
+    for _ in range(15):
+        x = random.randint(0, w)
+        y = random.randint(0, h)
+        size = random.randint(10, 40)
+        alpha_color = (*accent, 120)
+        draw.ellipse([x, y, x + size, y + size], fill=accent)
+
+    # 작은 별 모양 (다이아몬드)
+    for _ in range(8):
+        cx = random.randint(0, w)
+        cy = random.randint(0, h)
+        s = random.randint(8, 20)
+        draw.polygon([(cx, cy - s), (cx + s // 2, cy), (cx, cy + s), (cx - s // 2, cy)], fill="white")
+
+    # 큰 반투명 원 (버블 느낌)
+    for _ in range(5):
+        cx = random.randint(0, w)
+        cy = random.randint(0, h)
+        r = random.randint(50, 150)
+        light = tuple(min(c + 40, 255) for c in accent)
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=light, width=3)
+
+
+def _draw_rounded_text_box(draw: ImageDraw.Draw, x: int, y: int, text_w: int, text_h: int, color: tuple):
+    """둥근 텍스트 배경 박스를 그린다."""
+    pad_x, pad_y = 50, 30
+    draw.rounded_rectangle(
+        [x - pad_x, y - pad_y, x + text_w + pad_x, y + text_h + pad_y],
+        radius=30,
+        fill=(*color, 200) if len(color) == 3 else color,
+    )
+
+
+def _create_banner_image(channel_name: str, palette: dict) -> str:
+    """배너 이미지를 생성한다. (2560x1440) 파스텔 + 귀여운 스타일."""
     w, h = 2560, 1440
+    img = Image.new("RGBA", (w, h), (255, 255, 255, 255))
 
-    if bg_image_path and os.path.exists(bg_image_path):
-        img = Image.open(bg_image_path).convert("RGB")
-        img = img.resize((w, h), Image.LANCZOS)
-        img = img.filter(ImageFilter.GaussianBlur(radius=3))
-        # 어두운 오버레이
-        overlay = Image.new("RGBA", (w, h), (0, 0, 0, 140))
-        img = Image.composite(Image.new("RGB", (w, h), (0, 0, 0)), img, overlay.split()[3])
-    else:
-        img = Image.new("RGB", (w, h), (25, 25, 35))
+    # 파스텔 그라데이션 배경
+    bg = Image.new("RGB", (w, h))
+    _draw_pastel_gradient(bg, palette["bg1"], palette["bg2"])
+    img.paste(bg)
 
-    draw = ImageDraw.Draw(img)
-    font = _load_font(120)
+    draw = ImageDraw.Draw(img, "RGBA")
 
+    # 장식 요소
+    _draw_decorations(draw, w, h, palette["accent"])
+
+    # 채널명 텍스트
+    font = _load_font(140)
     bbox = draw.textbbox((0, 0), channel_name, font=font)
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
     x = (w - text_w) // 2
     y = (h - text_h) // 2
 
-    # 텍스트 그림자 + 본문
-    draw.text((x + 4, y + 4), channel_name, font=font, fill=(0, 0, 0))
-    draw.text((x, y), channel_name, font=font, fill=(255, 255, 255))
+    # 둥근 배경 박스
+    _draw_rounded_text_box(draw, x, y, text_w, text_h, (255, 255, 255))
 
+    # 텍스트 (진한 색)
+    draw.text((x + 3, y + 3), channel_name, font=font, fill=(100, 100, 100, 80))
+    draw.text((x, y), channel_name, font=font, fill=(60, 60, 80))
+
+    # 서브 텍스트
+    sub_font = _load_font(50)
+    sub_text = "YouTube Shorts"
+    sub_bbox = draw.textbbox((0, 0), sub_text, font=sub_font)
+    sub_w = sub_bbox[2] - sub_bbox[0]
+    sub_x = (w - sub_w) // 2
+    sub_y = y + text_h + 60
+    draw.text((sub_x, sub_y), sub_text, font=sub_font, fill=(120, 120, 140))
+
+    result = img.convert("RGB")
     run_id = uuid.uuid4().hex[:8]
     path = os.path.join(tempfile.gettempdir(), f"channel_banner_{run_id}.png")
-    img.save(path)
+    result.save(path)
     return path
 
 
-def _create_profile_image(channel_name: str, bg_image_path: str | None) -> str:
-    """프로필 이미지를 생성한다. (800x800)"""
+def _create_profile_image(channel_name: str, palette: dict) -> str:
+    """프로필 이미지를 생성한다. (800x800) 파스텔 + 귀여운 스타일."""
     size = 800
+    img = Image.new("RGBA", (size, size), (255, 255, 255, 255))
 
-    if bg_image_path and os.path.exists(bg_image_path):
-        img = Image.open(bg_image_path).convert("RGB")
-        # 정사각형 크롭 (중앙)
-        src_w, src_h = img.size
-        crop_size = min(src_w, src_h)
-        left = (src_w - crop_size) // 2
-        top = (src_h - crop_size) // 2
-        img = img.crop((left, top, left + crop_size, top + crop_size))
-        img = img.resize((size, size), Image.LANCZOS)
-        img = img.filter(ImageFilter.GaussianBlur(radius=2))
-        # 어두운 오버레이
-        overlay = Image.new("RGBA", (size, size), (0, 0, 0, 120))
-        img = Image.composite(Image.new("RGB", (size, size), (0, 0, 0)), img, overlay.split()[3])
-    else:
-        img = Image.new("RGB", (size, size), (25, 25, 35))
+    # 파스텔 그라데이션 배경
+    bg = Image.new("RGB", (size, size))
+    _draw_pastel_gradient(bg, palette["bg1"], palette["bg2"])
+    img.paste(bg)
 
-    draw = ImageDraw.Draw(img)
-    font = _load_font(100)
+    draw = ImageDraw.Draw(img, "RGBA")
 
-    # 채널명을 2줄로 나누기
+    # 장식
+    _draw_decorations(draw, size, size, palette["accent"])
+
+    # 중앙에 큰 원형 배경
+    center = size // 2
+    circle_r = 280
+    draw.ellipse(
+        [center - circle_r, center - circle_r, center + circle_r, center + circle_r],
+        fill=(255, 255, 255, 200),
+    )
+
+    # 채널명
+    font = _load_font(90)
     if len(channel_name) > 4:
         mid = len(channel_name) // 2
         lines = [channel_name[:mid], channel_name[mid:]]
     else:
         lines = [channel_name]
 
-    center = size // 2
-    y_offset = center - (len(lines) * 60)
+    total_h = len(lines) * 110
+    y_offset = center - total_h // 2
     for line in lines:
         bbox = draw.textbbox((0, 0), line, font=font)
         text_w = bbox[2] - bbox[0]
         x = (size - text_w) // 2
-        draw.text((x + 3, y_offset + 3), line, font=font, fill=(0, 0, 0))
-        draw.text((x, y_offset), line, font=font, fill=(255, 255, 255))
-        y_offset += 120
+        draw.text((x + 2, y_offset + 2), line, font=font, fill=(150, 150, 150, 80))
+        draw.text((x, y_offset), line, font=font, fill=(60, 60, 80))
+        y_offset += 110
 
+    result = img.convert("RGB")
     run_id = uuid.uuid4().hex[:8]
     path = os.path.join(tempfile.gettempdir(), f"channel_profile_{run_id}.png")
-    img.save(path)
+    result.save(path)
     return path
 
 
@@ -226,7 +276,7 @@ async def update_youtube_channel(channel_name: str, channel_description: str, ba
         results["description_updated"] = False
         results["update_error"] = str(e)
 
-    # 3. 프로필 이미지는 API로 변경 불가 — 경로만 안내
+    # 4. 프로필 이미지는 API로 변경 불가 — 경로만 안내
     results["channel_name_note"] = "채널명은 YouTube Studio에서 직접 변경해야 합니다"
     results["suggested_name"] = channel_name
     results["profile_image_note"] = "프로필 이미지는 YouTube Studio에서 직접 설정해야 합니다"
