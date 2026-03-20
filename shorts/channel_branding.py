@@ -103,24 +103,26 @@ async def _generate_banner_image(channel_name: str, dalle_prompt: str) -> str:
     path = await _generate_dalle_image(full_prompt, "1792x1024")
 
     if path:
-        # 채널명 텍스트 오버레이
+        # 2560x1440으로 리사이즈 (YouTube 배너 최소 2048x1152)
         img = Image.open(path).convert("RGBA")
+        img = img.resize((2560, 1440), Image.LANCZOS)
+
         overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
-        font = _load_font(80)
+        font = _load_font(100)
 
         bbox = draw.textbbox((0, 0), channel_name, font=font)
         text_w = bbox[2] - bbox[0]
         text_h = bbox[3] - bbox[1]
         w, h = img.size
         x = (w - text_w) // 2
-        y = h - text_h - 80
+        y = h - text_h - 120
 
         # 반투명 배경 박스
-        pad = 30
+        pad = 40
         draw.rounded_rectangle(
             [x - pad, y - pad, x + text_w + pad, y + text_h + pad],
-            radius=20,
+            radius=25,
             fill=(255, 255, 255, 180),
         )
         draw.text((x, y), channel_name, font=font, fill=(40, 40, 60, 255))
