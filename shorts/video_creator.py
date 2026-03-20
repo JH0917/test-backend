@@ -16,8 +16,12 @@ from moviepy import (
 )
 from PIL import Image, ImageDraw, ImageFont
 
+import logging
+
 import shorts.trend_analyzer as trend_module
 from shorts.trend_analyzer import _parse_json_response
+
+logger = logging.getLogger("shorts.video_creator")
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -128,7 +132,8 @@ async def _generate_scene_images(scenes: list[dict]) -> list[str]:
                 with open(path, "wb") as f:
                     f.write(img_resp.content)
                 image_paths.append(path)
-        except Exception:
+        except Exception as e:
+            logger.error(f"DALL-E 장면 {i} 생성 실패: {e}")
             fallback_path = _create_fallback_background(run_id, i)
             image_paths.append(fallback_path)
 

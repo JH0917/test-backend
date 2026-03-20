@@ -1,12 +1,15 @@
 import os
 import json
 import asyncio
+import logging
 import tempfile
 import uuid
 import httpx
 import anthropic
 import openai
 from PIL import Image, ImageDraw, ImageFont
+
+logger = logging.getLogger("shorts.channel_branding")
 
 import shorts.trend_analyzer as trend_module
 from shorts.trend_analyzer import _parse_json_response
@@ -89,7 +92,8 @@ async def _generate_dalle_image(prompt: str, size: str) -> str | None:
             with open(path, "wb") as f:
                 f.write(resp.content)
         return path
-    except Exception:
+    except Exception as e:
+        logger.error(f"DALL-E 이미지 생성 실패: {e}")
         return None
 
 
