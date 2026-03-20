@@ -13,6 +13,7 @@ from moviepy import (
     CompositeVideoClip,
     concatenate_videoclips,
     ColorClip,
+    vfx,
 )
 from PIL import Image, ImageDraw, ImageFont
 
@@ -58,22 +59,32 @@ async def _generate_script(topic: str, detail: str) -> dict:
 콘텐츠 포맷: {topic}
 이번 에피소드 주제: {detail}
 
-조건:
+## 톤 & 스타일 (매우 중요!)
+- **예능 프로그램처럼** 재미있고 과장되게. 정보 전달이 아니라 웃기는 게 목적.
+- 미래인이 현재를 보면서 **진심으로 당황하고, 어이없어하고, 웃기는** 느낌
+- 예시 톤: "아니 진짜로요? 이 시대 사람들은 하루에 7시간을 이 작은 유리판을 쳐다봤다고요? 화장실에서도요?! 역사책에 이렇게 적혀있는데 저도 처음엔 오타인 줄 알았습니다"
+- 딱딱한 설명 금지. 친구한테 얘기하듯 자연스럽고 감정이 살아있게.
+- 중간중간 웃음 포인트가 있어야 함
+
+## 나레이션 규칙
+- 하나의 이야기처럼 자연스럽게 이어져야 함 (장면별로 끊기면 안 됨)
+- 말투: 존댓말이지만 유쾌하게. 뉴스 앵커가 아니라 예능 MC 느낌.
+- 첫 문장에서 바로 시선을 잡을 것 (질문이나 충격적 사실로 시작)
+
+## 구성
 - 총 20초 내외 영상
-- 4~5개 장면으로 구성
-- 각 장면에 화면에 표시할 짧은 텍스트(15자 이내)와 나레이션 포함
-- 각 장면에 DALL-E로 생성할 일러스트 배경 설명 (영어, 만화/일러스트 스타일)
-- 채널 컨셉에 맞는 독특한 시점/톤 유지 (매 영상 일관되게)
-- 시청자의 호기심을 자극하는 도입부 (첫 1초에 시선 잡기)
+- 4~5개 장면
+- 각 장면에 화면에 표시할 짧은 텍스트(15자 이내)
+- 각 장면에 DALL-E용 일러스트 배경 설명 (영어)
 - 마지막에 "다음 편도 궁금하면 팔로우!" 식 유도 문구
-- 저작권 없는 소재만 사용 (영화/드라마/음악 등 타인 저작물 언급 금지)
+- 저작권 없는 소재만 사용
 
 다음 JSON 형식으로만 응답하세요:
 {{
     "title": "영상 제목 (호기심 자극, 40자 이내)",
     "description": "영상 설명 (100자 이내)",
     "tags": ["태그1", "태그2", "태그3", "태그4", "태그5"],
-    "narration": "전체 나레이션 텍스트 (자연스럽게 이어지는 하나의 문단)",
+    "narration": "전체 나레이션 텍스트 (하나의 자연스러운 이야기. 장면 구분 없이 매끄럽게 이어지는 문단)",
     "scenes": [
         {{
             "text": "화면에 표시할 텍스트",
@@ -97,7 +108,12 @@ async def _generate_script(topic: str, detail: str) -> dict:
 async def _generate_tts(narration: str) -> str:
     """edge-tts로 나레이션 음성을 생성한다."""
     tts_path = os.path.join(tempfile.gettempdir(), f"shorts_narration_{uuid.uuid4().hex[:8]}.mp3")
-    communicate = edge_tts.Communicate(narration, TTS_VOICE)
+    communicate = edge_tts.Communicate(
+        narration,
+        TTS_VOICE,
+        rate="+10%",
+        pitch="+5Hz",
+    )
     await communicate.save(tts_path)
     return tts_path
 
@@ -108,7 +124,7 @@ async def _generate_scene_images(scenes: list[dict]) -> list[str]:
     image_paths = []
 
     client = openai.OpenAI(api_key=OPENAI_API_KEY)
-    style_suffix = "Cute cartoon illustration style, vibrant colors, simple and clean, suitable for YouTube Shorts vertical video background. No text in the image."
+    style_suffix = "Cute cartoon illustration style, vibrant colors, expressive and funny, suitable for YouTube Shorts vertical video background. No text in the image."
 
     for i, scene in enumerate(scenes):
         try:
@@ -162,7 +178,7 @@ def _create_text_image(text: str, run_id: str, index: int, width: int = WIDTH, h
     font = None
     for fp in font_paths:
         if os.path.exists(fp):
-            font = ImageFont.truetype(fp, 60)
+            font = ImageFont.truetype(fp, 48)
             break
     if font is None:
         font = ImageFont.load_default()
@@ -176,12 +192,12 @@ def _create_text_image(text: str, run_id: str, index: int, width: int = WIDTH, h
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
     x = (width - text_w) // 2
-    y = (height - text_h) // 2
+    y = height - text_h - 180
 
-    padding = 30
+    padding = 25
     draw.rounded_rectangle(
         [x - padding, y - padding, x + text_w + padding, y + text_h + padding],
-        radius=20,
+        radius=15,
         fill=(0, 0, 0, 160),
     )
     draw.text((x, y), text, font=font, fill=(255, 255, 255, 255))
@@ -202,20 +218,36 @@ async def _compose_video(script: dict, tts_path: str, image_paths: list[str]) ->
     total_scene_duration = sum(s["duration"] for s in scenes)
     ratio = total_duration / total_scene_duration if total_scene_duration > 0 else 1
 
+    fade_duration = 0.5
     clips = []
+    current_time = 0
+
     for i, scene in enumerate(scenes):
         duration = scene["duration"] * ratio
         img_path = image_paths[i] if i < len(image_paths) else image_paths[-1]
 
         bg = ImageClip(img_path).resized((WIDTH, HEIGHT)).with_duration(duration)
 
+        # 크로스페이드: 페이드인/아웃 적용
+        if i > 0:
+            bg = bg.with_effects([vfx.CrossFadeIn(fade_duration)])
+        if i < len(scenes) - 1:
+            bg = bg.with_effects([vfx.CrossFadeOut(fade_duration)])
+
         text_img_path = _create_text_image(scene["text"], run_id, i)
         text_overlay = ImageClip(text_img_path).with_duration(duration)
 
         composite = CompositeVideoClip([bg, text_overlay], size=(WIDTH, HEIGHT))
+        composite = composite.with_start(current_time)
         clips.append(composite)
 
-    final = concatenate_videoclips(clips, method="compose")
+        # 다음 장면은 fade_duration만큼 겹침
+        if i < len(scenes) - 1:
+            current_time += duration - fade_duration
+        else:
+            current_time += duration
+
+    final = CompositeVideoClip(clips, size=(WIDTH, HEIGHT))
     final = final.with_audio(audio)
 
     if final.duration > total_duration:
@@ -224,7 +256,7 @@ async def _compose_video(script: dict, tts_path: str, image_paths: list[str]) ->
     await asyncio.to_thread(
         final.write_videofile,
         output_path,
-        fps=30,
+        fps=24,
         codec="libx264",
         audio_codec="aac",
         preset="ultrafast",
