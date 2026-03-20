@@ -167,11 +167,26 @@ async def _generate_tts(narration: str) -> str:
     response = await asyncio.to_thread(
         client.audio.speech.create,
         model="gpt-4o-mini-tts",
-        voice="ash",
+        voice="coral",
         input=narration,
-        instructions="한국어 유튜브 쇼츠 나레이션. 나긋나긋하면서 적당히 억양을 섞어서 중독성 있게. 발표하듯 또박또박하되 재밌는 부분에서 톤을 살짝 올려. 마치 친구한테 재밌는 얘기 해주듯이 자연스럽게. 속도는 약간 빠르게.",
+        instructions="""유튜브 쇼츠 나레이션을 해주세요. 반드시 한국어로 읽어주세요.
+
+말투 스타일:
+- 20대 남자가 친구한테 재밌는 이야기 해주는 것처럼 자연스럽게
+- 절대 아나운서나 로봇처럼 읽지 말 것
+- "있잖아 이거 진짜 웃긴데" 하면서 얘기하는 느낌
+
+억양과 감정:
+- 웃긴 부분에서는 살짝 웃음이 섞인 톤으로
+- 충격적인 사실 말할 때는 "진짜?" 하듯이 톤을 올려서
+- "네, 다시 말씀드립니다" 같은 반복 강조 부분은 힘주어서
+- 마침표에서 확실히 끊고, 다음 문장 시작할 때 약간 텀 두기
+
+속도:
+- 전체적으로 빠르게, 텐션 있게
+- 펀치라인 직전에만 살짝 느려졌다가 터뜨리기""",
         response_format="mp3",
-        speed=1.15,
+        speed=1.2,
     )
     response.stream_to_file(tts_path)
     return tts_path
