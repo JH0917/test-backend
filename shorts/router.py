@@ -25,7 +25,6 @@ def get_status():
     return {
         "current_topic": trend_module.current_topic,
         "current_topic_detail": trend_module.current_topic_detail,
-        "current_concept": trend_module.current_concept,
     }
 
 

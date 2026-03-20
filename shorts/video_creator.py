@@ -36,7 +36,7 @@ async def create_shorts_video() -> str:
     if not trend_module.current_topic or not trend_module.current_topic_detail:
         raise ValueError("주제가 설정되지 않았습니다. analyze_youtube_trends()를 먼저 실행하세요.")
 
-    script = await _generate_script(trend_module.current_topic, trend_module.current_topic_detail, trend_module.current_concept)
+    script = await _generate_script(trend_module.current_topic, trend_module.current_topic_detail)
     last_generated_script = script
 
     tts_path = await _generate_tts(script["narration"])
@@ -46,14 +46,12 @@ async def create_shorts_video() -> str:
     return video_path
 
 
-async def _generate_script(topic: str, detail: str, concept: str = "") -> dict:
+async def _generate_script(topic: str, detail: str) -> dict:
     """Claude API로 영상 스크립트를 생성한다."""
-    concept_line = f"\n채널 컨셉: {concept}" if concept else ""
-
     prompt = f"""유튜브 쇼츠 영상 스크립트를 작성해주세요.
 
 콘텐츠 포맷: {topic}
-이번 에피소드 주제: {detail}{concept_line}
+이번 에피소드 주제: {detail}
 
 조건:
 - 총 20초 내외 영상

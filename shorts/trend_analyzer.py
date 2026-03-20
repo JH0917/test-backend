@@ -13,7 +13,6 @@ MODEL = "claude-opus-4-20250514"
 # 전역변수: 선정된 주제
 current_topic = None
 current_topic_detail = None
-current_concept = None
 
 # 검색할 카테고리 (ID: 이름)
 SEARCH_CATEGORIES = {
@@ -31,15 +30,13 @@ SEARCH_CATEGORIES = {
 
 async def analyze_youtube_trends() -> dict:
     """유튜브 트렌드를 분석하고 사람이 촬영하지 않고 만들 수 있는 쇼츠 주제를 선정한다."""
-    global current_topic, current_topic_detail, current_concept
+    global current_topic, current_topic_detail
 
     trending_data = await _fetch_trending_videos()
     topic = await _select_topic_with_ai(trending_data)
 
     current_topic = topic["topic"]
     current_topic_detail = topic["detail"]
-    current_concept = topic.get("concept", "")
-
     return topic
 
 
@@ -182,7 +179,6 @@ async def _select_topic_with_ai(trending_data: list[dict]) -> dict:
 {{
     "topic": "콘텐츠 포맷명 (예: 사물의 과학수업, 숫자가 말하는 세계사 등)",
     "detail": "첫 번째 에피소드 주제 (구체적으로)",
-    "concept": "이 포맷의 핵심 컨셉을 한 줄로 (예: 사물의 입장에서 과학 원리를 설명한다)",
     "why_repeatable": "왜 이 포맷으로 수백 편을 만들 수 있는지",
     "reason": "트렌드 분석 기반 선정 이유"
 }}"""

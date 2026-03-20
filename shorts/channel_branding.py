@@ -21,7 +21,6 @@ async def generate_channel_branding() -> dict:
     branding = await _generate_branding_with_ai(
         trend_module.current_topic,
         trend_module.current_topic_detail,
-        trend_module.current_concept,
     )
 
     image_path = _create_channel_image(branding["channel_name"])
@@ -30,13 +29,12 @@ async def generate_channel_branding() -> dict:
     return branding
 
 
-async def _generate_branding_with_ai(topic: str, detail: str, concept: str) -> dict:
+async def _generate_branding_with_ai(topic: str, detail: str) -> dict:
     """Claude로 채널 브랜딩을 생성한다."""
     prompt = f"""유튜브 쇼츠 채널의 브랜딩을 만들어주세요.
 
 콘텐츠 포맷: {topic}
 첫 에피소드: {detail}
-핵심 컨셉: {concept}
 
 다음을 만들어주세요:
 1. 채널명: 짧고 임팩트 있게 (2~4단어). 자극적이거나 유머러스해도 OK. 한눈에 뭐하는 채널인지 느낌이 와야 함.
