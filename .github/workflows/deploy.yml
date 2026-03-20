@@ -19,7 +19,7 @@ jobs:
 
       - name: Build and Push Docker Image
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/test-backend:latest .
+          docker build --no-cache -t ${{ secrets.DOCKERHUB_USERNAME }}/test-backend:latest .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/test-backend:latest
 
       - name: Deploy to EC2
