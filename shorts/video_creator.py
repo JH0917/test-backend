@@ -87,7 +87,7 @@ async def _generate_script(topic: str, detail: str) -> dict:
     "title": "영상 제목 (호기심 자극, 40자 이내)",
     "description": "영상 설명 (100자 이내)",
     "tags": ["태그1", "태그2", "태그3", "태그4", "태그5"],
-    "narration": "전체 나레이션 텍스트 (하나의 자연스러운 이야기. 장면 구분 없이 매끄럽게 이어지는 문단)",
+    "narration": "전체 나레이션 텍스트 (짧고 임팩트 있는 문장들. 군더더기 없이. 한 문장이 길면 안 됨)",
     "scenes": [
         {{
             "text": "화면에 표시할 텍스트",
@@ -111,7 +111,7 @@ async def _generate_script(topic: str, detail: str) -> dict:
 async def _generate_tts(narration: str) -> str:
     """edge-tts로 나레이션 음성을 생성한다."""
     tts_path = os.path.join(tempfile.gettempdir(), f"shorts_narration_{uuid.uuid4().hex[:8]}.mp3")
-    communicate = edge_tts.Communicate(narration, TTS_VOICE)
+    communicate = edge_tts.Communicate(narration, TTS_VOICE, rate="+15%")
     await communicate.save(tts_path)
     return tts_path
 
