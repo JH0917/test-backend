@@ -13,6 +13,7 @@ MODEL = "claude-opus-4-20250514"
 # 전역변수: 선정된 주제
 current_topic = None
 current_topic_detail = None
+current_episode = None
 
 # 검색할 카테고리 (ID: 이름)
 SEARCH_CATEGORIES = {

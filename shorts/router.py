@@ -14,6 +14,7 @@ from shorts.video_creator import _save_episode
 class TopicRequest(BaseModel):
     topic: str
     detail: str
+    episode: str | None = None
 
 logger = logging.getLogger("shorts.router")
 
@@ -41,10 +42,12 @@ def set_topic(req: TopicRequest):
     """주제를 직접 수동 설정한다."""
     trend_module.current_topic = req.topic
     trend_module.current_topic_detail = req.detail
+    trend_module.current_episode = req.episode
     return {
         "status": "success",
         "current_topic": req.topic,
         "current_topic_detail": req.detail,
+        "current_episode": req.episode,
     }
 
 

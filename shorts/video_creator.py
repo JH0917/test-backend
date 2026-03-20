@@ -6,7 +6,6 @@ import uuid
 import httpx
 import anthropic
 import openai
-import edge_tts
 from moviepy import (
     ImageClip,
     AudioFileClip,
@@ -24,7 +23,6 @@ logger = logging.getLogger("shorts.video_creator")
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-TTS_VOICE = "ko-KR-HyunsuMultilingualNeural"
 EPISODE_HISTORY_PATH = os.getenv("EPISODE_HISTORY_PATH", "/app/episode_history.json")
 
 WIDTH = 720
@@ -57,7 +55,7 @@ async def create_shorts_video() -> str:
     if not trend_module.current_topic or not trend_module.current_topic_detail:
         raise ValueError("주제가 설정되지 않았습니다. analyze_youtube_trends()를 먼저 실행하세요.")
 
-    script = await _generate_script(trend_module.current_topic, trend_module.current_topic_detail)
+    script = await _generate_script(trend_module.current_topic, trend_module.current_topic_detail, trend_module.current_episode)
     last_generated_script = script
 
     tts_path = await _generate_tts(script["narration"])
@@ -67,7 +65,7 @@ async def create_shorts_video() -> str:
     return video_path
 
 
-async def _generate_script(topic: str, detail: str) -> dict:
+async def _generate_script(topic: str, detail: str, episode: str | None = None) -> dict:
     """Claude API로 영상 스크립트를 생성한다."""
     # 기존 에피소드 히스토리
     history = _load_episode_history()
@@ -79,12 +77,14 @@ async def _generate_script(topic: str, detail: str) -> dict:
             history_text += f"- {ep['title']}: {ep['description']}\n"
         history_text += "\n위 에피소드와 다른 새로운 소재/각도로 만들어주세요.\n"
 
+    episode_text = ""
+    if episode:
+        episode_text = f"\n\n**이번 에피소드 소재 (반드시 이 소재로 만들 것!):** {episode}"
+
     prompt = f"""유튜브 쇼츠 영상 스크립트를 작성해주세요.
 
 콘텐츠 포맷: {topic}
-이번 에피소드 주제: {detail}{history_text}
-
-**중요: 반드시 위의 '이번 에피소드 주제'를 다뤄야 합니다. 다른 주제로 바꾸지 마세요.**
+에피소드 방향: {detail}{episode_text}{history_text}
 
 ## 컨셉: 2124년 대학교 '21세기 문명학' 기말 발표
 - 화자는 2124년 대학생. 역사학과 기말 발표로 21세기 인류의 기묘한 행동을 조사해서 발표하는 상황.
@@ -160,10 +160,20 @@ async def _generate_script(topic: str, detail: str) -> dict:
 
 
 async def _generate_tts(narration: str) -> str:
-    """edge-tts로 나레이션 음성을 생성한다."""
+    """OpenAI TTS로 나레이션 음성을 생성한다."""
     tts_path = os.path.join(tempfile.gettempdir(), f"shorts_narration_{uuid.uuid4().hex[:8]}.mp3")
-    communicate = edge_tts.Communicate(narration, TTS_VOICE, rate="+25%")
-    await communicate.save(tts_path)
+
+    client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    response = await asyncio.to_thread(
+        client.audio.speech.create,
+        model="gpt-4o-mini-tts",
+        voice="ash",
+        input=narration,
+        instructions="한국어 유튜브 쇼츠 나레이션. 나긋나긋하면서 적당히 억양을 섞어서 중독성 있게. 발표하듯 또박또박하되 재밌는 부분에서 톤을 살짝 올려. 마치 친구한테 재밌는 얘기 해주듯이 자연스럽게. 속도는 약간 빠르게.",
+        response_format="mp3",
+        speed=1.15,
+    )
+    response.stream_to_file(tts_path)
     return tts_path
 
 
