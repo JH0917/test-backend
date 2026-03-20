@@ -8,6 +8,7 @@ from shorts.trend_analyzer import analyze_youtube_trends
 from shorts.video_creator import create_shorts_video
 from shorts.youtube_uploader import upload_to_youtube
 from shorts.channel_branding import generate_channel_branding, update_youtube_channel
+from shorts.video_creator import _save_episode
 
 
 class TopicRequest(BaseModel):
@@ -107,5 +108,6 @@ async def _full_pipeline():
             tags=script["tags"],
         )
         logger.info(f"업로드 완료: {result}")
+        _save_episode(script["title"], script["description"])
     except Exception as e:
         logger.error(f"파이프라인 실패: {e}", exc_info=True)

@@ -61,7 +61,6 @@ async def create_shorts_video() -> str:
 
     script = await _generate_script(trend_module.current_topic, trend_module.current_topic_detail)
     last_generated_script = script
-    _save_episode(script["title"], script["description"])
 
     tts_path = await _generate_tts(script["narration"])
     image_paths = await _generate_scene_images(script["scenes"])

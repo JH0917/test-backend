@@ -54,6 +54,9 @@ async def _daily_shorts_job():
     )
     logger.info(f"업로드 완료: {result['url']}")
 
+    from shorts.video_creator import _save_episode
+    _save_episode(script["title"], script["description"])
+
     _cleanup_temp_files()
     return result
 
