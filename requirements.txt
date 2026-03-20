@@ -11,3 +11,4 @@ google-auth-oauthlib
 edge-tts
 moviepy
 Pillow
+openai

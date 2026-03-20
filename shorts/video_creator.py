@@ -5,6 +5,7 @@ import tempfile
 import uuid
 import httpx
 import anthropic
+import openai
 import edge_tts
 from moviepy import (
     ImageClip,
@@ -19,7 +20,7 @@ import shorts.trend_analyzer as trend_module
 from shorts.trend_analyzer import _parse_json_response
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 TTS_VOICE = "ko-KR-SunHiNeural"
 
 WIDTH = 1080
@@ -40,7 +41,7 @@ async def create_shorts_video() -> str:
     last_generated_script = script
 
     tts_path = await _generate_tts(script["narration"])
-    image_paths = await _fetch_background_images(script["search_keyword"], count=len(script["scenes"]))
+    image_paths = await _generate_scene_images(script["scenes"])
     video_path = await _compose_video(script, tts_path, image_paths)
 
     return video_path
@@ -57,6 +58,7 @@ async def _generate_script(topic: str, detail: str) -> dict:
 - 총 20초 내외 영상
 - 4~5개 장면으로 구성
 - 각 장면에 화면에 표시할 짧은 텍스트(15자 이내)와 나레이션 포함
+- 각 장면에 DALL-E로 생성할 일러스트 배경 설명 (영어, 만화/일러스트 스타일)
 - 채널 컨셉에 맞는 독특한 시점/톤 유지 (매 영상 일관되게)
 - 시청자의 호기심을 자극하는 도입부 (첫 1초에 시선 잡기)
 - 마지막에 "다음 편도 궁금하면 팔로우!" 식 유도 문구
@@ -67,12 +69,12 @@ async def _generate_script(topic: str, detail: str) -> dict:
     "title": "영상 제목 (호기심 자극, 40자 이내)",
     "description": "영상 설명 (100자 이내)",
     "tags": ["태그1", "태그2", "태그3", "태그4", "태그5"],
-    "search_keyword": "배경 이미지 검색에 쓸 영어 키워드 1개",
     "narration": "전체 나레이션 텍스트 (자연스럽게 이어지는 하나의 문단)",
     "scenes": [
         {{
             "text": "화면에 표시할 텍스트",
-            "duration": 4.0
+            "duration": 4.0,
+            "image_prompt": "Cute cartoon illustration of ... (English, describe the scene visually)"
         }}
     ]
 }}"""
@@ -81,7 +83,7 @@ async def _generate_script(topic: str, detail: str) -> dict:
     message = await asyncio.to_thread(
         client.messages.create,
         model="claude-opus-4-20250514",
-        max_tokens=1000,
+        max_tokens=1200,
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -96,46 +98,45 @@ async def _generate_tts(narration: str) -> str:
     return tts_path
 
 
-async def _fetch_background_images(keyword: str, count: int) -> list[str]:
-    """Pexels API에서 배경 이미지를 가져온다. 실패 시 단색 배경으로 폴백."""
+async def _generate_scene_images(scenes: list[dict]) -> list[str]:
+    """DALL-E 3로 각 장면의 일러스트 배경을 생성한다."""
     run_id = uuid.uuid4().hex[:8]
     image_paths = []
 
-    try:
-        url = "https://api.pexels.com/v1/search"
-        headers = {"Authorization": PEXELS_API_KEY}
-        params = {"query": keyword, "per_page": count, "orientation": "portrait"}
+    client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    style_suffix = "Cute cartoon illustration style, vibrant colors, simple and clean, suitable for YouTube Shorts vertical video background. No text in the image."
 
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(url, headers=headers, params=params)
-            resp.raise_for_status()
-            data = resp.json()
+    for i, scene in enumerate(scenes):
+        try:
+            prompt = scene.get("image_prompt", "abstract colorful background")
+            full_prompt = f"{prompt}. {style_suffix}"
 
-        photos = data.get("photos", [])
-        async with httpx.AsyncClient(timeout=30) as client:
-            for i, photo in enumerate(photos[:count]):
-                try:
-                    img_url = photo["src"]["large2x"]
-                    resp = await client.get(img_url)
-                    path = os.path.join(tempfile.gettempdir(), f"shorts_bg_{run_id}_{i}.jpg")
-                    with open(path, "wb") as f:
-                        f.write(resp.content)
-                    image_paths.append(path)
-                except Exception:
-                    pass
-    except Exception:
-        pass
+            response = await asyncio.to_thread(
+                client.images.generate,
+                model="dall-e-3",
+                prompt=full_prompt,
+                size="1024x1792",
+                quality="standard",
+                n=1,
+            )
 
-    # 이미지가 부족하면 단색 배경 생성
-    while len(image_paths) < count:
-        fallback_path = _create_fallback_background(run_id, len(image_paths))
-        image_paths.append(fallback_path)
+            image_url = response.data[0].url
+
+            async with httpx.AsyncClient(timeout=60) as http_client:
+                img_resp = await http_client.get(image_url)
+                path = os.path.join(tempfile.gettempdir(), f"shorts_dalle_{run_id}_{i}.png")
+                with open(path, "wb") as f:
+                    f.write(img_resp.content)
+                image_paths.append(path)
+        except Exception:
+            fallback_path = _create_fallback_background(run_id, i)
+            image_paths.append(fallback_path)
 
     return image_paths
 
 
 def _create_fallback_background(run_id: str, index: int) -> str:
-    """Pexels에서 이미지를 못 가져왔을 때 단색 배경을 생성한다."""
+    """DALL-E 실패 시 단색 배경을 생성한다."""
     img = Image.new("RGB", (WIDTH, HEIGHT), (30, 30, 50))
     path = os.path.join(tempfile.gettempdir(), f"shorts_fallback_{run_id}_{index}.jpg")
     img.save(path)
@@ -176,7 +177,7 @@ def _create_text_image(text: str, run_id: str, index: int, width: int = WIDTH, h
     draw.rounded_rectangle(
         [x - padding, y - padding, x + text_w + padding, y + text_h + padding],
         radius=20,
-        fill=(0, 0, 0, 180),
+        fill=(0, 0, 0, 160),
     )
     draw.text((x, y), text, font=font, fill=(255, 255, 255, 255))
 
