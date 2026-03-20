@@ -9,6 +9,5 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-RUN ls -la /app/ && ls -la /app/shorts/ || echo "NO SHORTS DIR"
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

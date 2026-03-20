@@ -29,9 +29,10 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/test-backend:latest
             sudo docker stop test-backend || true
             sudo docker rm test-backend || true
+            sudo docker system prune -a -f
+            sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/test-backend:latest
             echo '${{ secrets.YOUTUBE_TOKEN_JSON }}' | sudo tee /home/ec2-user/youtube_token.json > /dev/null
             sudo chmod 600 /home/ec2-user/youtube_token.json
             sudo docker run -d -p 8000:8000 \
