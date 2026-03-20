@@ -81,7 +81,8 @@ async def _channel_branding_pipeline():
         result = await update_youtube_channel(
             channel_name=branding["channel_name"],
             channel_description=branding["channel_description"],
-            image_path=branding["image_path"],
+            banner_path=branding["banner_path"],
+            profile_path=branding["profile_path"],
         )
         logger.info(f"채널 업데이트 결과: {result}")
     except Exception as e:
