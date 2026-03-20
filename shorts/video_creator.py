@@ -36,7 +36,7 @@ async def create_shorts_video() -> str:
     if not trend_module.current_topic or not trend_module.current_topic_detail:
         raise ValueError("주제가 설정되지 않았습니다. analyze_youtube_trends()를 먼저 실행하세요.")
 
-    script = await _generate_script(trend_module.current_topic, trend_module.current_topic_detail)
+    script = await _generate_script(trend_module.current_topic, trend_module.current_topic_detail, trend_module.current_concept)
     last_generated_script = script
 
     tts_path = await _generate_tts(script["narration"])
@@ -46,19 +46,23 @@ async def create_shorts_video() -> str:
     return video_path
 
 
-async def _generate_script(topic: str, detail: str) -> dict:
+async def _generate_script(topic: str, detail: str, concept: str = "") -> dict:
     """Claude API로 영상 스크립트를 생성한다."""
+    concept_line = f"\n채널 컨셉: {concept}" if concept else ""
+
     prompt = f"""유튜브 쇼츠 영상 스크립트를 작성해주세요.
 
-주제 카테고리: {topic}
-구체적 주제: {detail}
+콘텐츠 포맷: {topic}
+이번 에피소드 주제: {detail}{concept_line}
 
 조건:
 - 총 20초 내외 영상
 - 4~5개 장면으로 구성
 - 각 장면에 화면에 표시할 짧은 텍스트(15자 이내)와 나레이션 포함
-- 시청자의 호기심을 자극하는 도입부
-- 마지막에 구독/좋아요 유도 문구
+- 채널 컨셉에 맞는 독특한 시점/톤 유지 (매 영상 일관되게)
+- 시청자의 호기심을 자극하는 도입부 (첫 1초에 시선 잡기)
+- 마지막에 "다음 편도 궁금하면 팔로우!" 식 유도 문구
+- 저작권 없는 소재만 사용 (영화/드라마/음악 등 타인 저작물 언급 금지)
 
 다음 JSON 형식으로만 응답하세요:
 {{

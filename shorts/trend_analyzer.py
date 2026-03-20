@@ -13,6 +13,7 @@ MODEL = "claude-opus-4-20250514"
 # 전역변수: 선정된 주제
 current_topic = None
 current_topic_detail = None
+current_concept = None
 
 # 검색할 카테고리 (ID: 이름)
 SEARCH_CATEGORIES = {
@@ -30,13 +31,14 @@ SEARCH_CATEGORIES = {
 
 async def analyze_youtube_trends() -> dict:
     """유튜브 트렌드를 분석하고 사람이 촬영하지 않고 만들 수 있는 쇼츠 주제를 선정한다."""
-    global current_topic, current_topic_detail
+    global current_topic, current_topic_detail, current_concept
 
     trending_data = await _fetch_trending_videos()
     topic = await _select_topic_with_ai(trending_data)
 
     current_topic = topic["topic"]
     current_topic_detail = topic["detail"]
+    current_concept = topic.get("concept", "")
 
     return topic
 
@@ -148,26 +150,41 @@ async def _select_topic_with_ai(trending_data: list[dict]) -> dict:
         for v in sorted_data[:150]
     )
 
-    prompt = f"""당신은 유튜브 쇼츠 콘텐츠 기획 전문가입니다.
+    prompt = f"""당신은 유튜브 쇼츠 채널 성장 전략가입니다.
 
-아래는 현재 한국 유튜브 인기 동영상 {len(sorted_data[:150])}개 목록입니다:
+## 현재 한국 유튜브 인기 동영상 {len(sorted_data[:150])}개:
 
 {trending_summary}
 
-이 트렌드를 분석하고, 다음 조건에 맞는 쇼츠 콘텐츠 주제를 1개 선정해주세요:
+## 당신의 임무
 
-조건:
-1. 사람이 직접 촬영하지 않고 만들 수 있는 영상 (텍스트, 이미지, 나레이션 조합)
-2. 유유미미, 사물의 경고 같은 채널 스타일 참고 (흥미로운 사실, 심리테스트, 랭킹, 상식 퀴즈, 놀라운 이야기 등)
-3. 욕설, 음란한 내용 제외
-4. 20초 내외로 만들 수 있는 짧은 콘텐츠
-5. 시청자의 호기심을 자극하는 주제
+위 트렌드를 참고하되, 단순히 "지금 뜨는 주제"를 따라가지 마세요.
+대신, **채널을 장기적으로 성장시킬 수 있는 독창적인 콘텐츠 포맷**을 설계하세요.
 
-다음 JSON 형식으로만 응답하세요:
+## 성공 채널 분석 (참고)
+
+- **사물의 경고**: 사물이 1인칭으로 말하는 포맷. "나는 전자레인지인데..." 식으로 물건의 입장에서 경고/팁을 전달. 독특한 시점 + 유머 = 평균 수만 조회수
+- **유유미미**: 시그니처 멘트 + 신기한 과학/역사 원리를 짧게 설명. 중독성 있는 포맷 반복 = 채널 정체성 확립
+- **핵심 공통점**: (1) 사람이 안 나옴 (2) 반복 가능한 포맷 (3) 채널만의 시그니처 (4) 무한히 에피소드 생산 가능
+
+## 조건 (필수)
+
+1. **사람이 직접 촬영하지 않고** 텍스트+이미지+나레이션만으로 제작 가능
+2. **저작권 문제 없는 소재만** — 영화/드라마/음악 등 타인의 저작물 사용 불가. 과학 원리, 역사적 사실, 일상 상식, 심리학 등 누구나 쓸 수 있는 소재만 가능
+3. **반복 가능한 포맷** — 같은 컨셉으로 수백 편 만들 수 있어야 함
+4. **채널 정체성** — 이 포맷만의 독특한 시점이나 캐릭터가 있어야 함 (예: 사물의 입장, 미래인의 시점, 숫자가 말하는 것 등)
+5. 욕설, 음란한 내용 제외
+6. 20초 내외 짧은 영상
+7. 위 트렌드에서 **사람들이 관심 있어하는 큰 카테고리**(과학, 심리, 역사, 일상 등)를 파악하되, 거기에 **독창적 시점/포맷**을 결합
+
+## 응답 형식 (JSON만)
+
 {{
-    "topic": "주제 카테고리 (예: 놀라운 사실, 심리테스트, 랭킹 등)",
-    "detail": "구체적인 영상 주제 (예: 세계에서 가장 비싼 음식 TOP 5)",
-    "reason": "이 주제를 선정한 이유"
+    "topic": "콘텐츠 포맷명 (예: 사물의 과학수업, 숫자가 말하는 세계사 등)",
+    "detail": "첫 번째 에피소드 주제 (구체적으로)",
+    "concept": "이 포맷의 핵심 컨셉을 한 줄로 (예: 사물의 입장에서 과학 원리를 설명한다)",
+    "why_repeatable": "왜 이 포맷으로 수백 편을 만들 수 있는지",
+    "reason": "트렌드 분석 기반 선정 이유"
 }}"""
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
