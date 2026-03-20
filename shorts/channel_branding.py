@@ -47,8 +47,8 @@ async def _generate_branding_with_ai(topic: str, detail: str) -> dict:
 다음을 만들어주세요:
 1. 채널명: 짧고 임팩트 있게 (2~4단어). 자극적이거나 유머러스해도 OK. 한눈에 뭐하는 채널인지 느낌이 와야 함.
 2. 채널 설명: 한 줄로. 호기심 자극하는 톤. 구독 유도 느낌.
-3. 배너 이미지 프롬프트: DALL-E용 영어 프롬프트. 채널 주제를 표현하는 귀여운 만화/일러스트 스타일. 가로형 배경 이미지. 텍스트 없이.
-4. 프로필 이미지 프롬프트: DALL-E용 영어 프롬프트. 채널을 상징하는 귀여운 캐릭터 또는 아이콘. 심플하고 눈에 띄는 디자인. 텍스트 없이.
+3. 배너 이미지 프롬프트: DALL-E용 영어 프롬프트. 채널 주제를 표현하는 넓은 풍경/장면 일러스트. 캐릭터 없이 배경만. 파스텔톤. 텍스트 없이.
+4. 프로필 이미지 프롬프트: DALL-E용 영어 프롬프트. 채널을 상징하는 귀여운 마스코트 캐릭터 1개만. 단색 배경. 심플하고 미니멀. 텍스트 없이. 배너와 완전히 다른 구도.
 
 참고 채널명 예시: 사물의 경고, 유유미미, 침착맨, 지식한입, 1분과학
 
@@ -99,7 +99,7 @@ async def _generate_dalle_image(prompt: str, size: str) -> str | None:
 
 async def _generate_banner_image(channel_name: str, dalle_prompt: str) -> str:
     """DALL-E로 배너 이미지를 생성한다. (1792x1024)"""
-    full_prompt = f"{dalle_prompt}. Cute cartoon illustration style, vibrant pastel colors, wide landscape composition for YouTube channel banner. No text in the image."
+    full_prompt = f"{dalle_prompt}. Wide panoramic scenery illustration, soft pastel colors, no characters, no people, dreamy atmosphere, wide landscape composition. No text in the image."
     path = await _generate_dalle_image(full_prompt, "1792x1024")
 
     if path:
@@ -137,7 +137,7 @@ async def _generate_banner_image(channel_name: str, dalle_prompt: str) -> str:
 
 async def _generate_profile_image(channel_name: str, dalle_prompt: str) -> str:
     """DALL-E로 프로필 이미지를 생성한다. (1024x1024)"""
-    full_prompt = f"{dalle_prompt}. Cute cartoon style icon, vibrant colors, simple design, centered composition, suitable for a small circular profile picture. No text in the image."
+    full_prompt = f"{dalle_prompt}. Single cute mascot character, chibi style, solid pastel background, minimal design, centered, suitable for small circular profile picture. No text, no scenery."
     path = await _generate_dalle_image(full_prompt, "1024x1024")
 
     if path:
