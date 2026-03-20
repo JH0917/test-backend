@@ -1,7 +1,10 @@
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter
 import pymysql
 from pyspark.sql import SparkSession
+
+logging.basicConfig(level=logging.INFO)
 
 from shorts.router import router as shorts_router
 from shorts.scheduler import start_scheduler, stop_scheduler
