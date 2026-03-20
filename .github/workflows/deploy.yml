@@ -35,6 +35,7 @@ jobs:
             sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/test-backend:latest
             echo '${{ secrets.YOUTUBE_TOKEN_JSON }}' | sudo tee /home/ec2-user/youtube_token.json > /dev/null
             sudo chmod 600 /home/ec2-user/youtube_token.json
+            [ -f /home/ec2-user/episode_history.json ] || echo '[]' | sudo tee /home/ec2-user/episode_history.json > /dev/null
             sudo docker run -d -p 8000:8000 \
               -e YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }} \
               -e ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} \
@@ -42,4 +43,5 @@ jobs:
               -e OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} \
               -e YOUTUBE_TOKEN_PATH=/app/youtube_token.json \
               -v /home/ec2-user/youtube_token.json:/app/youtube_token.json:ro \
+              -v /home/ec2-user/episode_history.json:/app/episode_history.json \
               --name test-backend ${{ secrets.DOCKERHUB_USERNAME }}/test-backend:latest

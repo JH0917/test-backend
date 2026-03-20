@@ -27,12 +27,29 @@ logger = logging.getLogger("shorts.video_creator")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 TTS_VOICE = "ko-KR-InJoonNeural"
+EPISODE_HISTORY_PATH = os.getenv("EPISODE_HISTORY_PATH", "/app/episode_history.json")
 
 WIDTH = 720
 HEIGHT = 1280
 
 # 캐시: 마지막으로 생성된 스크립트 (업로드 시 재사용)
 last_generated_script = None
+
+
+def _load_episode_history() -> list[dict]:
+    """에피소드 히스토리를 로드한다."""
+    if os.path.exists(EPISODE_HISTORY_PATH):
+        with open(EPISODE_HISTORY_PATH, "r") as f:
+            return json.load(f)
+    return []
+
+
+def _save_episode(title: str, description: str):
+    """생성된 에피소드를 히스토리에 저장한다."""
+    history = _load_episode_history()
+    history.append({"title": title, "description": description})
+    with open(EPISODE_HISTORY_PATH, "w") as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
 
 
 async def create_shorts_video() -> str:
@@ -44,6 +61,7 @@ async def create_shorts_video() -> str:
 
     script = await _generate_script(trend_module.current_topic, trend_module.current_topic_detail)
     last_generated_script = script
+    _save_episode(script["title"], script["description"])
 
     tts_path = await _generate_tts(script["narration"])
     image_paths = await _generate_scene_images(script["scenes"])
@@ -54,10 +72,20 @@ async def create_shorts_video() -> str:
 
 async def _generate_script(topic: str, detail: str) -> dict:
     """Claude API로 영상 스크립트를 생성한다."""
+    # 기존 에피소드 히스토리
+    history = _load_episode_history()
+    history_text = ""
+    if history:
+        recent = history[-20:]  # 최근 20개만
+        history_text = "\n\n## 이미 만든 에피소드 (절대 겹치지 말 것!)\n"
+        for ep in recent:
+            history_text += f"- {ep['title']}: {ep['description']}\n"
+        history_text += "\n위 에피소드와 다른 새로운 소재/각도로 만들어주세요.\n"
+
     prompt = f"""유튜브 쇼츠 영상 스크립트를 작성해주세요.
 
 콘텐츠 포맷: {topic}
-이번 에피소드 주제: {detail}
+이번 에피소드 주제: {detail}{history_text}
 
 ## 톤 & 스타일 (매우 중요!)
 - **다큐멘터리 나레이터처럼 차분하고 진지하게 말하는데, 내용 자체가 웃긴** 스타일
