@@ -189,41 +189,42 @@ async def update_youtube_channel(channel_name: str, channel_description: str, ba
     youtube = _get_authenticated_service()
     results = {}
 
-    # 1. 채널 설명 업데이트
+    # 1. 채널 정보 조회
     try:
         channels = youtube.channels().list(part="brandingSettings", mine=True).execute()
-        if channels.get("items"):
-            channel = channels["items"][0]
-            channel["brandingSettings"]["channel"]["description"] = channel_description
-            youtube.channels().update(
-                part="brandingSettings",
-                body=channel,
-            ).execute()
-            results["description_updated"] = True
-        else:
-            results["description_updated"] = False
-            results["description_error"] = "채널을 찾을 수 없습니다"
+        channel = channels["items"][0] if channels.get("items") else None
     except Exception as e:
-        results["description_updated"] = False
-        results["description_error"] = str(e)
+        results["error"] = f"채널 조회 실패: {e}"
+        return results
+
+    if not channel:
+        results["error"] = "채널을 찾을 수 없습니다"
+        return results
 
     # 2. 배너 이미지 업로드
     try:
         media = MediaFileUpload(banner_path, mimetype="image/png")
         banner = youtube.channelBanners().insert(media_body=media).execute()
-        youtube.channels().update(
-            part="brandingSettings",
-            body={
-                "id": channels["items"][0]["id"],
-                "brandingSettings": {
-                    "image": {"bannerExternalUrl": banner["url"]},
-                },
-            },
-        ).execute()
-        results["banner_updated"] = True
+        channel["brandingSettings"].setdefault("image", {})
+        channel["brandingSettings"]["image"]["bannerExternalUrl"] = banner["url"]
+        results["banner_uploaded"] = True
     except Exception as e:
         results["banner_updated"] = False
         results["banner_error"] = str(e)
+
+    # 3. 채널 설명 + 배너 한 번에 업데이트
+    try:
+        channel["brandingSettings"]["channel"]["description"] = channel_description
+        youtube.channels().update(
+            part="brandingSettings",
+            body=channel,
+        ).execute()
+        results["description_updated"] = True
+        if results.get("banner_uploaded"):
+            results["banner_updated"] = True
+    except Exception as e:
+        results["description_updated"] = False
+        results["update_error"] = str(e)
 
     # 3. 프로필 이미지는 API로 변경 불가 — 경로만 안내
     results["channel_name_note"] = "채널명은 YouTube Studio에서 직접 변경해야 합니다"
