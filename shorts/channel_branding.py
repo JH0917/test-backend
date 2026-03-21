@@ -104,7 +104,7 @@ async def _generate_dalle_image(prompt: str, size: str) -> str | None:
 
 async def _generate_banner_image(channel_name: str, dalle_prompt: str) -> str:
     """DALL-E로 배너 이미지를 생성한다. (1792x1024)"""
-    full_prompt = f"{dalle_prompt}. Wide panoramic scenery illustration, soft pastel colors, no characters, no people, dreamy atmosphere, wide landscape composition. No text in the image."
+    full_prompt = "Wide panoramic illustration, black background, left side shows an orange glowing zone, right side shows a purple glowing zone, golden VS symbol in the center with sparks, dramatic lighting from both sides meeting in the middle, cinematic battle atmosphere, clean minimal style. No text."
     path = await _generate_dalle_image(full_prompt, "1792x1024")
 
     if path:
@@ -142,7 +142,7 @@ async def _generate_banner_image(channel_name: str, dalle_prompt: str) -> str:
 
 async def _generate_profile_image(channel_name: str, dalle_prompt: str) -> str:
     """DALL-E로 프로필 이미지를 생성한다. (1024x1024)"""
-    full_prompt = f"{dalle_prompt}. Single cute mascot character, chibi style, solid pastel background, minimal design, centered, suitable for small circular profile picture. No text, no scenery."
+    full_prompt = "A large hand holding up a balance scale from below, minimalist illustration style, black background, the scale is golden/metallic, clean lines, centered composition, suitable for small circular profile picture. No text."
     path = await _generate_dalle_image(full_prompt, "1024x1024")
 
     if path:
