@@ -31,10 +31,10 @@ async def _daily_shorts_job():
 
     logger.info("=== 쇼츠 자동 생성 시작 ===")
 
-    # 매일 새 밸런스게임 질문 선정
-    from shorts.trend_analyzer import analyze_youtube_trends
-    topic = await analyze_youtube_trends()
-    logger.info(f"오늘의 질문: {topic['detail']}")
+    # 매일 새 밸런스게임 질문 선정 (topic은 유지, detail만 변경)
+    from shorts.trend_analyzer import pick_daily_question
+    question = await pick_daily_question()
+    logger.info(f"오늘의 질문: {question}")
 
     video_path = await create_shorts_video()
     logger.info(f"영상 생성 완료: {video_path}")

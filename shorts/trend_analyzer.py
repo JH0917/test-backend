@@ -85,3 +85,12 @@ async def _select_balance_question() -> dict:
     )
 
     return _parse_json_response(message.content[0].text)
+
+
+async def pick_daily_question() -> str:
+    """매일 황금밸런스 질문을 하나 골라서 current_topic_detail만 업데이트한다."""
+    global current_topic_detail
+
+    result = await _select_balance_question()
+    current_topic_detail = result["detail"]
+    return result["detail"]
