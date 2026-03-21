@@ -41,6 +41,7 @@ jobs:
               -e ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} \
               -e PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }} \
               -e OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} \
+              -e ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }} \
               -e YOUTUBE_TOKEN_PATH=/app/youtube_token.json \
               -v /home/ec2-user/youtube_token.json:/app/youtube_token.json:ro \
               -v /home/ec2-user/episode_history.json:/app/episode_history.json \
