@@ -57,11 +57,9 @@ async def run_create(background_tasks: BackgroundTasks):
 
 @router.post("/run")
 async def run_full_pipeline(background_tasks: BackgroundTasks):
-    """영상 생성 → 업로드 파이프라인을 실행한다. (주제는 미리 설정 필요)"""
-    if not trend_module.current_topic:
-        return {"status": "error", "message": "주제가 설정되지 않았습니다. /analyze 또는 /topic으로 먼저 설정하세요."}
+    """질문 선정 → 영상 생성 → 업로드 파이프라인을 실행한다."""
     background_tasks.add_task(_full_pipeline)
-    return {"status": "started", "message": f"주제 '{trend_module.current_topic_detail}'로 영상 생성이 시작되었습니다."}
+    return {"status": "started", "message": "밸런스게임 영상 생성이 시작되었습니다."}
 
 
 @router.post("/channel")
@@ -91,8 +89,14 @@ async def _channel_branding_pipeline():
 
 
 async def _full_pipeline():
-    """파이프라인: 영상 생성 → 업로드."""
+    """파이프라인: 질문 선정 → 영상 생성 → 업로드 → 히스토리 저장 → 정리."""
     try:
+        from shorts.trend_analyzer import pick_daily_question
+        from shorts.scheduler import _cleanup_temp_files
+
+        question = await pick_daily_question()
+        logger.info(f"오늘의 질문: {question}")
+
         video_path = await create_shorts_video()
         logger.info(f"영상 생성: {video_path}")
 
@@ -109,5 +113,6 @@ async def _full_pipeline():
         )
         logger.info(f"업로드 완료: {result}")
         _save_episode(script["title"], script["description"])
+        _cleanup_temp_files()
     except Exception as e:
         logger.error(f"파이프라인 실패: {e}", exc_info=True)
