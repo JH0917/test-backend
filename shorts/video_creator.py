@@ -304,7 +304,19 @@ async def _compose_video(script: dict, tts_path: str, image_paths: list[str]) ->
         duration = scene["duration"] * ratio
         img_path = image_paths[i] if i < len(image_paths) else image_paths[-1]
 
-        bg = ImageClip(img_path).resized((WIDTH, HEIGHT)).with_duration(duration)
+        # 이미지를 약간 크게 로드 (줌 효과용 여유분)
+        bg_raw = ImageClip(img_path).resized((int(WIDTH * 1.15), int(HEIGHT * 1.15))).with_duration(duration)
+
+        # 줌인/줌아웃 교차 적용
+        if i % 2 == 0:
+            # 줌인: 1.0x → 1.12x
+            bg_zoomed = bg_raw.resized(lambda t, d=duration: 1 + 0.12 * (t / d))
+        else:
+            # 줌아웃: 1.12x → 1.0x
+            bg_zoomed = bg_raw.resized(lambda t, d=duration: 1.12 - 0.12 * (t / d))
+
+        bg_zoomed = bg_zoomed.with_position("center")
+        bg = CompositeVideoClip([bg_zoomed], size=(WIDTH, HEIGHT)).with_duration(duration)
 
         # 크로스페이드
         if i > 0:
