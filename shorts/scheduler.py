@@ -31,11 +31,10 @@ async def _daily_shorts_job():
 
     logger.info("=== 쇼츠 자동 생성 시작 ===")
 
-    if not trend_module.current_topic:
-        logger.error("주제가 설정되지 않았습니다. /api_ljh/shorts/analyze 또는 /api_ljh/shorts/topic으로 먼저 주제를 설정하세요.")
-        return
-
-    logger.info(f"현재 주제: {trend_module.current_topic} - {trend_module.current_topic_detail}")
+    # 매일 새 밸런스게임 질문 선정
+    from shorts.trend_analyzer import analyze_youtube_trends
+    topic = await analyze_youtube_trends()
+    logger.info(f"오늘의 질문: {topic['detail']}")
 
     video_path = await create_shorts_video()
     logger.info(f"영상 생성 완료: {video_path}")
@@ -77,12 +76,12 @@ def start_scheduler():
     """매일 23:00 KST에 쇼츠를 생성/업로드하는 스케줄러를 시작한다."""
     scheduler.add_job(
         _run_daily_job,
-        trigger=CronTrigger(hour=23, minute=0, timezone="Asia/Seoul"),
+        trigger=CronTrigger(hour=22, minute=0, timezone="Asia/Seoul"),
         id="daily_shorts",
         replace_existing=True,
     )
     scheduler.start()
-    logger.info("쇼츠 스케줄러 시작 (매일 23:00 KST)")
+    logger.info("쇼츠 스케줄러 시작 (매일 22:00 KST)")
 
 
 def stop_scheduler():
