@@ -51,7 +51,7 @@ def set_topic(req: TopicRequest):
 @router.post("/create")
 async def run_create(background_tasks: BackgroundTasks):
     """선정된 주제로 영상을 생성한다. (함수 2 수동 트리거)"""
-    background_tasks.add_task(create_shorts_video)
+    background_tasks.add_task(_create_pipeline)
     return {"status": "started", "message": "영상 생성이 백그라운드에서 시작되었습니다."}
 
 
@@ -86,6 +86,32 @@ async def _channel_branding_pipeline():
         logger.info(f"채널 업데이트 결과: {result}")
     except Exception as e:
         logger.error(f"채널 브랜딩 실패: {e}", exc_info=True)
+
+
+async def _create_pipeline():
+    """파이프라인: 영상 생성 → 업로드 → 히스토리 저장 → 정리. (질문은 이미 설정된 것 사용)"""
+    try:
+        from shorts.scheduler import _cleanup_temp_files
+
+        video_path = await create_shorts_video()
+        logger.info(f"영상 생성: {video_path}")
+
+        script = vc_module.last_generated_script
+        if not script:
+            logger.error("스크립트 캐시가 없습니다")
+            return
+
+        result = await upload_to_youtube(
+            video_path=video_path,
+            title=script["title"],
+            description=script["description"],
+            tags=script["tags"],
+        )
+        logger.info(f"업로드 완료: {result}")
+        _save_episode(script["title"], script["description"])
+        _cleanup_temp_files()
+    except Exception as e:
+        logger.error(f"파이프라인 실패: {e}", exc_info=True)
 
 
 async def _full_pipeline():
