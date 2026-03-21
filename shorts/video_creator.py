@@ -57,7 +57,7 @@ async def create_shorts_video() -> str:
     if not trend_module.current_topic or not trend_module.current_topic_detail:
         raise ValueError("주제가 설정되지 않았습니다. analyze_youtube_trends()를 먼저 실행하세요.")
 
-    script = await _generate_script(trend_module.current_topic, trend_module.current_topic_detail, trend_module.current_episode)
+    script = await _generate_script(trend_module.current_topic, trend_module.current_topic_detail)
     last_generated_script = script
 
     tts_path = await _generate_tts(script["narration"])
@@ -67,26 +67,21 @@ async def create_shorts_video() -> str:
     return video_path
 
 
-async def _generate_script(topic: str, detail: str, episode: str | None = None) -> dict:
+async def _generate_script(topic: str, detail: str) -> dict:
     """Claude API로 영상 스크립트를 생성한다."""
-    # 기존 에피소드 히스토리
+    # 이전 질문 히스토리
     history = _load_episode_history()
     history_text = ""
     if history:
-        recent = history[-20:]  # 최근 20개만
-        history_text = "\n\n## 이미 만든 에피소드 (절대 겹치지 말 것!)\n"
+        recent = history[-20:]
+        history_text = "\n\n## 이미 다룬 질문 (절대 겹치지 말 것!)\n"
         for ep in recent:
-            history_text += f"- {ep['title']}: {ep['description']}\n"
-        history_text += "\n위 에피소드와 다른 새로운 소재/각도로 만들어주세요.\n"
-
-    episode_text = ""
-    if episode:
-        episode_text = f"\n\n**이번 에피소드 소재 (반드시 이 소재로 만들 것!):** {episode}"
+            history_text += f"- {ep['title']}\n"
 
     prompt = f"""당신은 유튜브 쇼츠 밸런스게임 콘텐츠 스크립트 작가입니다.
 
 ⚠️ 이번 밸런스게임 질문 (반드시 이 질문으로 스크립트를 작성할 것!):
-{detail}{episode_text}{history_text}
+{detail}{history_text}
 
 ## 채널 컨셉
 "밸런스게임 결론내기" — 누구나 한번쯤 고민해본 황금 밸런스게임 질문에 나름의 논리와 유머로 결론을 내주는 채널.

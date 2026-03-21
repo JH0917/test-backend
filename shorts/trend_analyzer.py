@@ -11,7 +11,6 @@ MODEL = "claude-opus-4-20250514"
 # 전역변수: 선정된 주제
 current_topic = "밸런스게임 결론내기"
 current_topic_detail = "밸런스게임 질문에 논리와 유머로 결론을 내주는 채널"
-current_episode = None
 
 
 async def analyze_youtube_trends() -> dict:
