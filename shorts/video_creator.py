@@ -69,19 +69,10 @@ async def create_shorts_video() -> str:
 
 async def _generate_script(topic: str, detail: str) -> dict:
     """Claude API로 영상 스크립트를 생성한다."""
-    # 이전 질문 히스토리
-    history = _load_episode_history()
-    history_text = ""
-    if history:
-        recent = history[-20:]
-        history_text = "\n\n## 이미 다룬 질문 (절대 겹치지 말 것!)\n"
-        for ep in recent:
-            history_text += f"- {ep['title']}\n"
-
     prompt = f"""당신은 유튜브 쇼츠 밸런스게임 콘텐츠 스크립트 작가입니다.
 
 ⚠️ 이번 밸런스게임 질문 (반드시 이 질문으로 스크립트를 작성할 것!):
-{detail}{history_text}
+{detail}
 
 ## 채널 컨셉
 "밸런스게임 결론내기" — 누구나 한번쯤 고민해본 황금 밸런스게임 질문에 나름의 논리와 유머로 결론을 내주는 채널.
