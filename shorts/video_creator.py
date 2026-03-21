@@ -134,7 +134,7 @@ async def _generate_script(topic: str, detail: str) -> dict:
 - 7개 장면으로 구성
 - 각 장면 5~8초
 - 각 장면에 화면에 표시할 짧은 텍스트(15자 이내)
-- 각 장면에 DALL-E용 일러스트 배경 설명 (영어, 유머러스한 카툰 스타일, 장면마다 다른 구도)
+- 각 장면에 DALL-E용 배경 설명 (영어, 3D 렌더링 스타일의 귀여운 캐릭터, 둥글둥글하지만 실제 사람 비율에 가까운 느낌, 장면마다 다른 구도)
 - 1번 장면: 질문 제시 (image_prompt는 반드시 해당 밸런스게임 질문의 A vs B를 시각적으로 표현. 예: 똥맛카레면 왼쪽에 카레 오른쪽에 똥, 가운데 VS)
 - 2~4번 장면: 정답 쪽(A) 분석 일러스트 (3장면으로 다양한 상황 묘사)
 - 5~6번 장면: 반대쪽(B) 언급 + 반박 일러스트 (2장면)
@@ -150,7 +150,7 @@ async def _generate_script(topic: str, detail: str) -> dict:
         {{
             "text": "화면에 표시할 텍스트",
             "duration": 7.0,
-            "image_prompt": "Funny cartoon illustration of ... (English, humorous style, vivid colors)"
+            "image_prompt": "3D rendered scene of ... (English, Pixar-style realistic proportions, soft lighting, vivid colors)"
         }}
     ]
 }}"""
@@ -196,7 +196,7 @@ async def _generate_scene_images(scenes: list[dict]) -> list[str]:
     image_paths = []
 
     client = openai.OpenAI(api_key=OPENAI_API_KEY)
-    style_suffix = "Cute cartoon illustration style, vibrant colors, expressive and funny, soft lighting, detailed background. No text or letters in the image."
+    style_suffix = "3D rendered Pixar-style, realistic human proportions with slightly rounded features, expressive and funny, soft cinematic lighting, vibrant colors, detailed background. No text or letters in the image."
 
     for i, scene in enumerate(scenes):
         try:
