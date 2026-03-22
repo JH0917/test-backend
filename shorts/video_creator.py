@@ -6,11 +6,14 @@ import uuid
 import httpx
 import anthropic
 import openai
+from runwayml import RunwayML
 from elevenlabs import ElevenLabs
 from moviepy import (
     ImageClip,
+    VideoFileClip,
     AudioFileClip,
     CompositeVideoClip,
+    concatenate_videoclips,
     vfx,
 )
 from PIL import Image, ImageDraw, ImageFont
@@ -25,6 +28,7 @@ logger = logging.getLogger("shorts.video_creator")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
+RUNWAY_API_KEY = os.getenv("RUNWAY_API_KEY", "")
 EPISODE_HISTORY_PATH = os.getenv("EPISODE_HISTORY_PATH", "/app/episode_history.json")
 
 WIDTH = 720
@@ -62,7 +66,8 @@ async def create_shorts_video() -> str:
 
     tts_path = await _generate_tts(script["narration"])
     image_paths = await _generate_scene_images(script["scenes"])
-    video_path = await _compose_video(script, tts_path, image_paths)
+    scene_video_paths = await _generate_scene_videos(script["scenes"], image_paths)
+    video_path = await _compose_video(script, tts_path, scene_video_paths)
 
     return video_path
 
@@ -134,7 +139,7 @@ async def _generate_script(topic: str, detail: str) -> dict:
 - 7개 장면으로 구성
 - 각 장면 5~8초
 - 각 장면에 화면에 표시할 짧은 텍스트(15자 이내)
-- 각 장면에 DALL-E용 배경 설명 (영어, 3D 렌더링 스타일의 귀여운 캐릭터, 둥글둥글하지만 실제 사람 비율에 가까운 느낌, 장면마다 다른 구도)
+- 각 장면에 DALL-E용 배경 설명 (영어, 실사 사진 스타일, 35mm 필름 느낌의 부드러운 톤, 자연스러운 표정, 장면마다 다른 구도)
 - 1번 장면: 질문 제시 (image_prompt는 반드시 해당 밸런스게임 질문의 A vs B를 시각적으로 표현. 예: 똥맛카레면 왼쪽에 카레 오른쪽에 똥, 가운데 VS)
 - 2~4번 장면: 정답 쪽(A) 분석 일러스트 (3장면으로 다양한 상황 묘사)
 - 5~6번 장면: 반대쪽(B) 언급 + 반박 일러스트 (2장면)
@@ -150,7 +155,7 @@ async def _generate_script(topic: str, detail: str) -> dict:
         {{
             "text": "화면에 표시할 텍스트",
             "duration": 7.0,
-            "image_prompt": "3D rendered scene of ... (English, Pixar-style realistic proportions, soft lighting, vivid colors)"
+            "image_prompt": "Editorial photograph of ... (English, 35mm film style, soft warm tones, natural expressions, real-world setting)"
         }}
     ]
 }}"""
@@ -196,7 +201,7 @@ async def _generate_scene_images(scenes: list[dict]) -> list[str]:
     image_paths = []
 
     client = openai.OpenAI(api_key=OPENAI_API_KEY)
-    style_suffix = "3D rendered Pixar-style, realistic human proportions with slightly rounded features, expressive and funny, soft cinematic lighting, vibrant colors, detailed background. No text or letters in the image."
+    style_suffix = "Editorial photograph style, shot on 35mm film, soft warm tones, gentle dreamy glow, real people in real settings, calm and natural expressions not exaggerated, natural daylight, vivid but natural colors, detailed background. No text or letters in the image."
 
     for i, scene in enumerate(scenes):
         try:
@@ -207,7 +212,7 @@ async def _generate_scene_images(scenes: list[dict]) -> list[str]:
                 client.images.generate,
                 model="dall-e-3",
                 prompt=full_prompt,
-                size="1024x1024",
+                size="1024x1792",
                 quality="standard",
                 n=1,
             )
@@ -226,6 +231,65 @@ async def _generate_scene_images(scenes: list[dict]) -> list[str]:
             image_paths.append(fallback_path)
 
     return image_paths
+
+
+async def _generate_scene_videos(scenes: list[dict], image_paths: list[str]) -> list[str]:
+    """Runway Gen-4 Turbo로 각 장면의 이미지를 영상으로 변환한다."""
+    run_id = uuid.uuid4().hex[:8]
+    video_paths = []
+
+    runway_client = RunwayML(api_key=RUNWAY_API_KEY)
+
+    for i, (scene, img_path) in enumerate(zip(scenes, image_paths)):
+        try:
+            # 이미지를 data URI로 변환
+            import base64
+            with open(img_path, "rb") as f:
+                img_data = base64.b64encode(f.read()).decode()
+            ext = img_path.rsplit(".", 1)[-1]
+            mime = "image/png" if ext == "png" else "image/jpeg"
+            data_uri = f"data:{mime};base64,{img_data}"
+
+            motion_prompt = scene.get("image_prompt", "gentle camera movement")
+            motion_prompt = f"Slow cinematic camera movement, subtle zoom and pan. {motion_prompt}"
+
+            task = await asyncio.to_thread(
+                runway_client.image_to_video.create,
+                model="gen4_turbo",
+                prompt_image=data_uri,
+                prompt_text=motion_prompt,
+                ratio="720:1280",
+                duration=5,
+            )
+
+            logger.info(f"Runway 장면 {i} 작업 시작: {task.id}")
+
+            # 완료까지 polling
+            while True:
+                task_detail = await asyncio.to_thread(
+                    runway_client.tasks.retrieve, task.id
+                )
+                if task_detail.status == "SUCCEEDED":
+                    video_url = task_detail.output[0]
+                    video_path = os.path.join(
+                        tempfile.gettempdir(), f"shorts_runway_{run_id}_{i}.mp4"
+                    )
+                    async with httpx.AsyncClient(timeout=120) as http_client:
+                        resp = await http_client.get(video_url)
+                        with open(video_path, "wb") as f:
+                            f.write(resp.content)
+                    video_paths.append(video_path)
+                    logger.info(f"Runway 장면 {i} 완료")
+                    break
+                elif task_detail.status in ("FAILED", "CANCELED"):
+                    raise RuntimeError(f"Runway 실패: {task_detail.status}")
+                await asyncio.sleep(5)
+
+        except Exception as e:
+            logger.error(f"Runway 장면 {i} 실패, 이미지 폴백: {e}")
+            video_paths.append(img_path)  # 실패 시 이미지로 폴백
+
+    return video_paths
 
 
 def _create_fallback_background(run_id: str, index: int) -> str:
@@ -278,8 +342,8 @@ def _create_text_image(text: str, run_id: str, index: int, width: int = WIDTH, h
     return path
 
 
-async def _compose_video(script: dict, tts_path: str, image_paths: list[str]) -> str:
-    """MoviePy로 장면들을 합성해 최종 영상을 만든다."""
+async def _compose_video(script: dict, tts_path: str, scene_paths: list[str]) -> str:
+    """MoviePy로 Runway 영상 클립들을 합성해 최종 영상을 만든다."""
     run_id = uuid.uuid4().hex[:8]
     output_path = os.path.join(tempfile.gettempdir(), f"shorts_output_{run_id}.mp4")
     audio = AudioFileClip(tts_path)
@@ -295,21 +359,23 @@ async def _compose_video(script: dict, tts_path: str, image_paths: list[str]) ->
 
     for i, scene in enumerate(scenes):
         duration = scene["duration"] * ratio
-        img_path = image_paths[i] if i < len(image_paths) else image_paths[-1]
+        path = scene_paths[i] if i < len(scene_paths) else scene_paths[-1]
 
-        # 이미지를 약간 크게 로드 (줌 효과용 여유분)
-        bg_raw = ImageClip(img_path).resized((int(WIDTH * 1.15), int(HEIGHT * 1.15))).with_duration(duration)
-
-        # 줌인/줌아웃 교차 적용
-        if i % 2 == 0:
-            # 줌인: 1.0x → 1.12x
-            bg_zoomed = bg_raw.resized(lambda t, d=duration: 1 + 0.12 * (t / d))
+        # 영상 파일이면 VideoFileClip, 이미지면 ImageClip (폴백)
+        if path.endswith(".mp4"):
+            bg = VideoFileClip(path).resized((WIDTH, HEIGHT))
+            # Runway 영상(5초)을 필요한 길이에 맞춤
+            if bg.duration < duration:
+                bg = bg.with_effects([vfx.TimeMirror()])  # 역재생으로 자연스럽게 늘림
+            bg = bg.subclipped(0, min(duration, bg.duration))
         else:
-            # 줌아웃: 1.12x → 1.0x
-            bg_zoomed = bg_raw.resized(lambda t, d=duration: 1.12 - 0.12 * (t / d))
-
-        bg_zoomed = bg_zoomed.with_position("center")
-        bg = CompositeVideoClip([bg_zoomed], size=(WIDTH, HEIGHT)).with_duration(duration)
+            bg_raw = ImageClip(path).resized((int(WIDTH * 1.15), int(HEIGHT * 1.15))).with_duration(duration)
+            if i % 2 == 0:
+                bg_zoomed = bg_raw.resized(lambda t, d=duration: 1 + 0.12 * (t / d))
+            else:
+                bg_zoomed = bg_raw.resized(lambda t, d=duration: 1.12 - 0.12 * (t / d))
+            bg_zoomed = bg_zoomed.with_position("center")
+            bg = CompositeVideoClip([bg_zoomed], size=(WIDTH, HEIGHT)).with_duration(duration)
 
         # 크로스페이드
         if i > 0:
@@ -318,16 +384,16 @@ async def _compose_video(script: dict, tts_path: str, image_paths: list[str]) ->
             bg = bg.with_effects([vfx.CrossFadeOut(fade_duration)])
 
         text_img_path = _create_text_image(scene["text"], run_id, i)
-        text_overlay = ImageClip(text_img_path).with_duration(duration)
+        text_overlay = ImageClip(text_img_path).with_duration(bg.duration)
 
         composite = CompositeVideoClip([bg, text_overlay], size=(WIDTH, HEIGHT))
         composite = composite.with_start(current_time)
         clips.append(composite)
 
         if i < len(scenes) - 1:
-            current_time += duration - fade_duration
+            current_time += bg.duration - fade_duration
         else:
-            current_time += duration
+            current_time += bg.duration
 
     final = CompositeVideoClip(clips, size=(WIDTH, HEIGHT))
     final = final.with_audio(audio)

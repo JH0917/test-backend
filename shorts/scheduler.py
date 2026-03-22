@@ -26,7 +26,8 @@ def _run_daily_job():
 def _cleanup_temp_files():
     """영상 생성 과정에서 만들어진 임시 파일을 정리한다."""
     patterns = ["shorts_narration_*", "shorts_bg_*", "shorts_fallback_*",
-                "shorts_text_*", "shorts_output_*"]
+                "shorts_text_*", "shorts_output_*", "shorts_runway_*",
+                "shorts_dalle_*"]
     for pattern in patterns:
         for f in glob.glob(os.path.join(tempfile.gettempdir(), pattern)):
             try:
