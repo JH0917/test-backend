@@ -84,30 +84,25 @@ async def _generate_script(topic: str, detail: str) -> dict:
 
 ## 스크립트 구조 (필수 준수)
 
-### 1단계: 질문 던지기 (3~4초)
+### 1단계: 질문 던지기 (2~3초)
 - 질문을 자연스럽게 읽고, 반드시 "결론 내드립니다."로 끝낼 것
 - "결론 내드립니다"는 채널 정체성 캐치프레이즈. 절대 빠뜨리지 마세요.
-- 질문 읽는 방식은 자유 (예: "똥맛 카레 vs 카레맛 똥, 결론 내드립니다." 또는 "투명인간이 될래 시간을 멈출래. 결론 내드립니다.")
 
-### 2단계: 정답 쪽(A) 깊이 분석 (15~20초, 나레이션의 약 50%)
-- 먼저 결론으로 선택할 쪽을 충분히 설명
-- 왜 이쪽이 맞는지 다양한 각도에서 웃기게 분석
-- 구체적인 상황 묘사, 예상치 못한 논리, 유머 포인트
-- 여러 근거를 쌓아가면서 설득력 있게
-- 이 부분이 영상의 메인. 가장 길고 재밌어야 함
+### 2단계: 정답 쪽(A) 핵심 분석 (10~12초, 나레이션의 약 45%)
+- 결론으로 선택할 쪽을 임팩트 있게 설명
+- 가장 강력한 근거 2~3개만 빠르게
+- 구체적인 상황 묘사 + 유머 포인트
+- 군더더기 없이 핵심만
 
-### 3단계: 반대쪽(B) 잠깐 언급 + 즉시 반박 (8~12초, 나레이션의 약 25%)
+### 3단계: 반대쪽(B) 언급 + 즉시 반박 (5~7초, 나레이션의 약 25%)
 - "근데 B는요?" 하면서 잠깐 B쪽 이야기
-- B의 장점을 살짝 인정하는 척하다가
-- 바로 반박해버리기 ("근데 잘 생각해보세요", "여기서 함정이 있습니다")
-- A가 왜 더 나은지 B를 깎아내리면서 확정
+- 바로 반박 ("근데 잘 생각해보세요")
 
-### 4단계: 결론 선언 (3~5초)
+### 4단계: 결론 선언 (2~3초)
 - "결론." 하고 확실하게 선택
 - 한 줄로 임팩트 있는 최종 근거
-- 약간 우기는 느낌도 OK ("이건 반박 불가입니다")
 
-### 5단계: 댓글 유도 (2~3초)
+### 5단계: 댓글 유도 (2초)
 - 반드시 "여러분 선택은?" 으로 마무리
 - 이 마무리 멘트도 채널 정체성. 절대 변경하지 마세요.
 
@@ -133,29 +128,32 @@ async def _generate_script(topic: str, detail: str) -> dict:
 - ❌ 딱딱한 분석 (재미가 최우선)
 - ❌ 너무 진지한 톤
 - ❌ 욕설, 음란한 내용
+- ❌ 선정적/19금 표현 (알고리즘 불이익)
 
 ## 구성
-- 총 40~55초 영상 (나레이션 400~550자)
-- 7개 장면으로 구성
-- 각 장면 5~8초
-- 각 장면에 화면에 표시할 짧은 텍스트(15자 이내)
+- 총 25~30초 영상 (나레이션 200~300자)
+- 5개 장면으로 구성
+- 각 장면 5~6초
+- 각 장면에 화면에 표시할 큰 자막 텍스트(10자 이내, 핵심 키워드 위주)
 - 각 장면에 DALL-E용 배경 설명 (영어, 실사 사진 스타일, 35mm 필름 느낌의 부드러운 톤, 자연스러운 표정, 장면마다 다른 구도)
-- 1번 장면: 질문 제시 (image_prompt는 반드시 해당 밸런스게임 질문의 A vs B를 시각적으로 표현. 예: 똥맛카레면 왼쪽에 카레 오른쪽에 똥, 가운데 VS)
-- 2~4번 장면: 정답 쪽(A) 분석 일러스트 (3장면으로 다양한 상황 묘사)
-- 5~6번 장면: 반대쪽(B) 언급 + 반박 일러스트 (2장면)
-- 7번 장면: 결론 + 댓글 유도 (image_prompt는 "Pure black background"로 고정. 텍스트로 결론 표시)
+- 각 장면에 Runway 영상 변환용 모션 설명 (영어, 장면 안에서 일어나는 구체적 동작/움직임 묘사)
+- 1번 장면: 질문 제시 (image_prompt는 반드시 해당 밸런스게임 질문의 A vs B를 시각적으로 표현)
+- 2~3번 장면: 정답 쪽(A) 핵심 분석 (2장면)
+- 4번 장면: 반대쪽(B) 반박 (1장면)
+- 5번 장면: 결론 + 댓글 유도 (image_prompt는 "Pure black background"로 고정. 텍스트로 결론 표시)
 
 다음 JSON 형식으로만 응답하세요:
 {{
-    "title": "영상 제목 (호기심 자극, 40자 이내)",
-    "description": "영상 설명 (100자 이내)",
+    "title": "영상 제목 (클린한 호기심 자극, 선정적 표현 금지, 40자 이내)",
+    "description": "영상 설명 (클린하고 알고리즘 친화적, 100자 이내)",
     "tags": ["태그1", "태그2", "태그3", "태그4", "태그5"],
-    "narration": "전체 나레이션 (구어체. 400~550자. 반드시 한쪽을 선택하는 결론 포함)",
+    "narration": "전체 나레이션 (구어체. 200~300자. 반드시 한쪽을 선택하는 결론 포함)",
     "scenes": [
         {{
-            "text": "화면에 표시할 텍스트",
-            "duration": 7.0,
-            "image_prompt": "Editorial photograph of ... (English, 35mm film style, soft warm tones, natural expressions, real-world setting)"
+            "text": "큰 자막 텍스트 (10자 이내, 핵심 키워드)",
+            "duration": 5.0,
+            "image_prompt": "Editorial photograph of ... (English, 35mm film style, soft warm tones, natural expressions, real-world setting)",
+            "motion_prompt": "구체적 동작 묘사 (English, e.g. 'The man takes a bite and his eyes widen, ice cream drips down')"
         }}
     ]
 }}"""
@@ -250,8 +248,8 @@ async def _generate_scene_videos(scenes: list[dict], image_paths: list[str]) -> 
             mime = "image/png" if ext == "png" else "image/jpeg"
             data_uri = f"data:{mime};base64,{img_data}"
 
-            motion_prompt = scene.get("image_prompt", "gentle camera movement")
-            motion_prompt = f"Slow cinematic camera movement, subtle zoom and pan. {motion_prompt}"
+            motion_prompt = scene.get("motion_prompt", scene.get("image_prompt", "gentle camera movement"))
+            motion_prompt = f"Cinematic motion, dynamic and expressive. {motion_prompt}"
 
             task = await asyncio.to_thread(
                 runway_client.image_to_video.create,
@@ -313,7 +311,7 @@ def _create_text_image(text: str, run_id: str, index: int, width: int = WIDTH, h
     font = None
     for fp in font_paths:
         if os.path.exists(fp):
-            font = ImageFont.truetype(fp, 44)
+            font = ImageFont.truetype(fp, 64)
             break
     if font is None:
         font = ImageFont.load_default()
@@ -327,14 +325,17 @@ def _create_text_image(text: str, run_id: str, index: int, width: int = WIDTH, h
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
     x = (width - text_w) // 2
-    y = height - text_h - 160
+    y = height - text_h - 200
 
-    padding = 20
+    padding = 28
     draw.rounded_rectangle(
         [x - padding, y - padding, x + text_w + padding, y + text_h + padding],
-        radius=12,
-        fill=(0, 0, 0, 150),
+        radius=16,
+        fill=(0, 0, 0, 180),
     )
+    # 흰색 큰 글씨 + 테두리 효과
+    for dx, dy in [(-2, -2), (-2, 2), (2, -2), (2, 2)]:
+        draw.text((x + dx, y + dy), text, font=font, fill=(0, 0, 0, 200))
     draw.text((x, y), text, font=font, fill=(255, 255, 255, 255))
 
     path = os.path.join(tempfile.gettempdir(), f"shorts_text_{run_id}_{index}.png")
