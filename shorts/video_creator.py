@@ -365,9 +365,10 @@ async def _compose_video(script: dict, tts_path: str, scene_paths: list[str]) ->
         # 영상 파일이면 VideoFileClip, 이미지면 ImageClip (폴백)
         if path.endswith(".mp4"):
             bg = VideoFileClip(path).resized((WIDTH, HEIGHT))
-            # Runway 영상(5초)을 필요한 길이에 맞춤
+            # Runway 영상(5초)을 필요한 길이에 맞춤: 슬로모션으로 자연스럽게 늘림
             if bg.duration < duration:
-                bg = bg.with_effects([vfx.TimeMirror()])  # 역재생으로 자연스럽게 늘림
+                slow_factor = bg.duration / duration  # e.g. 5/7 = 0.71x 속도
+                bg = bg.with_effects([vfx.MultiplySpeed(slow_factor)])
             bg = bg.subclipped(0, min(duration, bg.duration))
         else:
             bg_raw = ImageClip(path).resized((int(WIDTH * 1.15), int(HEIGHT * 1.15))).with_duration(duration)
