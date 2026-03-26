@@ -72,7 +72,7 @@ async def run_channel_branding(background_tasks: BackgroundTasks):
 
 
 async def _channel_branding_pipeline():
-    """채널 브랜딩 생성 → YouTube 업로드."""
+    """채널 브랜딩 생성 → YouTube 업로드.""" 
     try:
         branding = await generate_channel_branding()
         logger.info(f"채널 브랜딩 생성: {branding['channel_name']}")
