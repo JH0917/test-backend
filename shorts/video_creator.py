@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import tempfile
+import time
 import uuid
 import httpx
 import anthropic
@@ -142,11 +143,26 @@ async def _generate_script(topic: str, detail: str) -> dict:
 - 4번 장면: 반대쪽(B) 반박 (1장면)
 - 5번 장면: 결론 + 댓글 유도 (image_prompt는 "Pure black background"로 고정. 텍스트로 결론 표시)
 
+## 제목 규칙
+- "최종 결론", "완벽 정리" 같은 결론 암시 부제 금지 (클릭 동기를 약화시킴)
+- 대신 참여 유도형 사용: "당신의 선택은?", "너라면?", "결과가 충격적"
+- 선택지를 구체적으로: "과거 여행" 대신 "2009년 비트코인 사러 가기"처럼 상황 묘사
+- 40자 이내
+
+## 설명 규칙
+- 주제 키워드를 자연어로 포함 (SEO 최적화)
+- 예: "치킨과 피자 중 하나를 평생 포기해야 한다면? 밸런스게임 결론!"
+- 100자 이내
+
+## 태그 규칙
+- 처음 3개는 고정: "밸런스게임", "양자택일", "shorts"
+- 나머지 2개는 해당 주제 키워드
+
 다음 JSON 형식으로만 응답하세요:
 {{
-    "title": "영상 제목 (클린한 호기심 자극, 선정적 표현 금지, 40자 이내)",
-    "description": "영상 설명 (클린하고 알고리즘 친화적, 100자 이내)",
-    "tags": ["태그1", "태그2", "태그3", "태그4", "태그5"],
+    "title": "영상 제목 (참여 유도형, 선정적 표현 금지, 40자 이내)",
+    "description": "영상 설명 (주제 키워드 포함, 100자 이내)",
+    "tags": ["밸런스게임", "양자택일", "shorts", "주제태그1", "주제태그2"],
     "narration": "전체 나레이션 (구어체. 200~300자. 반드시 한쪽을 선택하는 결론 포함)",
     "scenes": [
         {{
@@ -262,8 +278,11 @@ async def _generate_scene_videos(scenes: list[dict], image_paths: list[str]) -> 
 
             logger.info(f"Runway 장면 {i} 작업 시작: {task.id}")
 
-            # 완료까지 polling
+            # 완료까지 polling (최대 5분)
+            poll_start = time.monotonic()
             while True:
+                if time.monotonic() - poll_start > 300:
+                    raise RuntimeError(f"Runway 장면 {i} 타임아웃 (300초)")
                 task_detail = await asyncio.to_thread(
                     runway_client.tasks.retrieve, task.id
                 )

@@ -45,8 +45,8 @@ def _upload_sync(video_path: str, title: str, description: str, tags: list[str])
     body = {
         "snippet": {
             "title": title,
-            "description": f"{description}\n\n#Shorts",
-            "tags": tags + ["Shorts"],
+            "description": f"{description}\n\n#밸런스게임 #양자택일 #Shorts",
+            "tags": list(dict.fromkeys(tags + ["Shorts", "밸런스게임", "양자택일"])),
             "categoryId": "22",
         },
         "status": {
