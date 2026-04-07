@@ -11,16 +11,18 @@ MODEL = "claude-opus-4-20250514"
 # 전역변수: 선정된 주제
 current_topic = "밸런스게임 결론내기"
 current_topic_detail = "밸런스게임 질문에 논리와 유머로 결론을 내주는 채널"
+current_keywords = ""
 
 
 async def analyze_youtube_trends() -> dict:
     """황금밸런스게임 질문을 선정한다."""
-    global current_topic, current_topic_detail
+    global current_topic, current_topic_detail, current_keywords
 
     topic = await _select_balance_question()
 
     current_topic = topic["topic"]
     current_topic_detail = topic["detail"]
+    current_keywords = topic.get("keywords", "")
     return topic
 
 
@@ -39,10 +41,13 @@ async def _select_balance_question() -> dict:
     history = _load_episode_history()
     history_text = ""
     if history:
-        recent = history[-30:]
-        history_text = "\n\n## 이미 다룬 질문 (절대 겹치지 말 것!)\n"
-        for ep in recent:
-            history_text += f"- {ep['title']}\n"
+        history_text = "\n\n## 이미 다룬 질문 (절대 겹치지 말 것! 유사 주제도 금지!)\n"
+        for ep in history:
+            keywords = ep.get('keywords', '')
+            if keywords:
+                history_text += f"- {ep['title']} (키워드: {keywords})\n"
+            else:
+                history_text += f"- {ep['title']}\n"
 
     prompt = f"""당신은 밸런스게임 전문가입니다.
 
@@ -82,13 +87,16 @@ async def _select_balance_question() -> dict:
 - ❌ 성적 뉘앙스가 있는 질문 (YouTube 알고리즘에서 노출 차단됨)
 - ❌ 대형 채널이 이미 바이럴시킨 특정 주제 (10억 얼굴 랜덤 등)
 - ❌ 답이 너무 뻔한 질문 (토론이 안 되면 댓글이 안 달림)
+- ❌ 위 "이미 다룬 질문" 목록과 동일하거나 유사한 주제 (예: "치킨vs피자"를 했으면 "피자vs치킨", "치킨vs햄버거" 등도 금지. 핵심 소재가 겹치면 안 됨)
+- ❌ 같은 카테고리에서 단순히 선택지만 바꾼 변형 질문 (예: "소주vs맥주"를 했으면 "소주vs와인"도 금지)
 
 ## 응답 형식 (JSON만)
 
 {{
     "topic": "밸런스게임 결론내기",
     "detail": "A vs B (구체적인 밸런스게임 질문)",
-    "reason": "이 질문을 선정한 이유"
+    "keywords": "핵심키워드1, 핵심키워드2 (이 질문의 핵심 소재 2~3개, 향후 중복 체크에 사용)",
+    "reason": "이 질문을 선정한 이유 + 기존 질문과 겹치지 않는 근거"
 }}"""
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -102,10 +110,11 @@ async def _select_balance_question() -> dict:
     return _parse_json_response(message.content[0].text)
 
 
-async def pick_daily_question() -> str:
-    """매일 황금밸런스 질문을 하나 골라서 current_topic_detail만 업데이트한다."""
-    global current_topic_detail
+async def pick_daily_question() -> dict:
+    """매일 황금밸런스 질문을 하나 골라서 current_topic_detail을 업데이트한다."""
+    global current_topic_detail, current_keywords
 
     result = await _select_balance_question()
     current_topic_detail = result["detail"]
-    return result["detail"]
+    current_keywords = result.get("keywords", "")
+    return result

@@ -47,10 +47,10 @@ def _load_episode_history() -> list[dict]:
     return []
 
 
-def _save_episode(title: str, description: str):
+def _save_episode(title: str, description: str, keywords: str = ""):
     """생성된 에피소드를 히스토리에 저장한다."""
     history = _load_episode_history()
-    history.append({"title": title, "description": description})
+    history.append({"title": title, "description": description, "keywords": keywords})
     with open(EPISODE_HISTORY_PATH, "w") as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
 

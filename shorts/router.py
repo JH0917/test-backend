@@ -91,6 +91,7 @@ async def _channel_branding_pipeline():
 async def _create_pipeline():
     """파이프라인: 영상 생성 → 업로드 → 히스토리 저장 → 정리. (질문은 이미 설정된 것 사용)"""
     try:
+        import shorts.trend_analyzer as trend_module
         from shorts.scheduler import _cleanup_temp_files
 
         video_path = await create_shorts_video()
@@ -108,7 +109,7 @@ async def _create_pipeline():
             tags=script["tags"],
         )
         logger.info(f"업로드 완료: {result}")
-        _save_episode(script["title"], script["description"])
+        _save_episode(script["title"], script["description"], trend_module.current_keywords)
         _cleanup_temp_files()
     except Exception as e:
         logger.error(f"파이프라인 실패: {e}", exc_info=True)
@@ -118,10 +119,11 @@ async def _full_pipeline():
     """파이프라인: 질문 선정 → 영상 생성 → 업로드 → 히스토리 저장 → 정리."""
     try:
         from shorts.trend_analyzer import pick_daily_question
+        import shorts.trend_analyzer as trend_module
         from shorts.scheduler import _cleanup_temp_files
 
         question = await pick_daily_question()
-        logger.info(f"오늘의 질문: {question}")
+        logger.info(f"오늘의 질문: {question.get('detail', question)}")
 
         video_path = await create_shorts_video()
         logger.info(f"영상 생성: {video_path}")
@@ -138,7 +140,7 @@ async def _full_pipeline():
             tags=script["tags"],
         )
         logger.info(f"업로드 완료: {result}")
-        _save_episode(script["title"], script["description"])
+        _save_episode(script["title"], script["description"], trend_module.current_keywords)
         _cleanup_temp_files()
     except Exception as e:
         logger.error(f"파이프라인 실패: {e}", exc_info=True)
