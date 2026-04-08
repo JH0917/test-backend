@@ -34,8 +34,24 @@ def _parse_json_response(response_text: str) -> dict:
     return json.loads(response_text.strip())
 
 
+def _has_keyword_overlap(new_keywords: str, history: list[dict]) -> bool:
+    """새 질문의 키워드가 기존 히스토리와 겹치는지 확인한다."""
+    if not new_keywords:
+        return False
+    new_kw_set = {k.strip().lower() for k in new_keywords.split(",")}
+    for ep in history:
+        old_keywords = ep.get("keywords", "")
+        if not old_keywords:
+            continue
+        old_kw_set = {k.strip().lower() for k in old_keywords.split(",")}
+        overlap = new_kw_set & old_kw_set
+        if len(overlap) >= 2 or (len(new_kw_set) <= 2 and len(overlap) >= 1):
+            return True
+    return False
+
+
 async def _select_balance_question() -> dict:
-    """Claude로 황금밸런스게임 질문을 선정한다."""
+    """Claude로 황금밸런스게임 질문을 선정한다. 키워드 중복 시 최대 3회 재시도."""
     from shorts.video_creator import _load_episode_history
 
     history = _load_episode_history()
@@ -49,6 +65,19 @@ async def _select_balance_question() -> dict:
             else:
                 history_text += f"- {ep['title']}\n"
 
+    for attempt in range(3):
+        result = await _call_claude_for_question(history_text)
+        if not _has_keyword_overlap(result.get("keywords", ""), history):
+            return result
+        import logging
+        logging.getLogger("shorts.trend_analyzer").warning(
+            f"키워드 중복 감지 (시도 {attempt + 1}/3): {result.get('detail')} - 키워드: {result.get('keywords')}"
+        )
+    return result
+
+
+async def _call_claude_for_question(history_text: str) -> dict:
+    """Claude API를 호출해 질문을 선정한다."""
     prompt = f"""당신은 밸런스게임 전문가입니다.
 
 ## 임무
