@@ -1,10 +1,13 @@
 import os
 import json
 import asyncio
+import logging
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+
+logger = logging.getLogger("shorts.youtube_uploader")
 
 TOKEN_PATH = os.getenv("YOUTUBE_TOKEN_PATH", "/app/youtube_token.json")
 
@@ -65,11 +68,45 @@ def _upload_sync(video_path: str, title: str, description: str, tags: list[str])
 
     response = request.execute()
 
+    video_id = response["id"]
+
+    # 업로드 후 CTA 댓글 자동 작성
+    try:
+        _post_cta_comment(youtube, video_id, title)
+    except Exception as e:
+        logger.warning(f"CTA 댓글 작성 실패 (영상 업로드는 성공): {e}")
+
     return {
-        "video_id": response["id"],
-        "url": f"https://youtube.com/shorts/{response['id']}",
+        "video_id": video_id,
+        "url": f"https://youtube.com/shorts/{video_id}",
         "title": title,
     }
+
+
+def _post_cta_comment(youtube, video_id: str, title: str):
+    """업로드된 영상에 CTA 댓글을 자동으로 작성한다."""
+    comment_text = (
+        f"🔥 {title}\n"
+        "여러분의 선택은? 좋아요 👍 or 댓글 💬로 알려주세요!\n"
+        "다음 문제도 기대해주세요 🔔\n\n"
+        "구독하면 매일 새로운 밸런스게임을 받아볼 수 있어요!"
+    )
+
+    youtube.commentThreads().insert(
+        part="snippet",
+        body={
+            "snippet": {
+                "videoId": video_id,
+                "topLevelComment": {
+                    "snippet": {
+                        "textOriginal": comment_text,
+                    }
+                },
+            }
+        },
+    ).execute()
+
+    logger.info(f"CTA 댓글 작성 완료: {video_id}")
 
 
 async def upload_to_youtube(video_path: str, title: str, description: str, tags: list[str]) -> dict:

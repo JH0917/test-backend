@@ -42,8 +42,11 @@ last_generated_script = None
 def _load_episode_history() -> list[dict]:
     """에피소드 히스토리를 로드한다."""
     if os.path.exists(EPISODE_HISTORY_PATH):
-        with open(EPISODE_HISTORY_PATH, "r") as f:
-            return json.load(f)
+        try:
+            with open(EPISODE_HISTORY_PATH, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            return []
     return []
 
 
@@ -75,18 +78,32 @@ async def create_shorts_video() -> str:
 
 async def _generate_script(topic: str, detail: str) -> dict:
     """Claude API로 영상 스크립트를 생성한다."""
+    history = _load_episode_history()
+    episode_number = len(history) + 1
+    last_title = history[-1]["title"] if history else "없음"
+
     prompt = f"""당신은 유튜브 쇼츠 밸런스게임 콘텐츠 스크립트 작가입니다.
 
 ⚠️ 이번 밸런스게임 질문 (반드시 이 질문으로 스크립트를 작성할 것!):
 {detail}
+
+⚠️ 이번 에피소드 번호: #{episode_number} (제목에 반드시 포함할 것. 예: "#{episode_number} 치킨vs피자 3초 안에 골라봐")
+⚠️ 직전 영상 제목: "{last_title}" — 이와 다른 제목 패턴을 사용할 것!
 
 ## 채널 컨셉
 "밸런스게임 결론내기" — 누구나 한번쯤 고민해본 황금 밸런스게임 질문에 나름의 논리와 유머로 결론을 내주는 채널.
 
 ## 스크립트 구조 (필수 준수)
 
-### 1단계: 질문 던지기 (2~3초)
-- 질문을 자연스럽게 읽고, 반드시 "결론 내드립니다."로 끝낼 것
+### 1단계: 질문 던지기 — 후킹 (2~3초)
+- 첫 문장은 반드시 시청자를 멈추게 하는 후킹으로 시작할 것!
+- 후킹 패턴 (매번 다른 패턴을 사용할 것):
+  * 통계형: "한국인 87%가 A를 고른다는데..."
+  * 도발형: "이거 고르면 진짜 이상한 사람입니다"
+  * 공감형: "솔직히 이건 고민 1초도 안 걸려요"
+  * 충격형: "이거 잘못 고르면 인생 끝입니다"
+  * 질문형: "자 여러분 딱 3초 줄게요. 골라보세요"
+- 후킹 뒤에 반드시 "결론 내드립니다."로 이어갈 것
 - "결론 내드립니다"는 채널 정체성 캐치프레이즈. 절대 빠뜨리지 마세요.
 
 ### 2단계: 정답 쪽(A) 핵심 분석 (10~12초, 나레이션의 약 45%)
@@ -145,8 +162,15 @@ async def _generate_script(topic: str, detail: str) -> dict:
 
 ## 제목 규칙
 - "최종 결론", "완벽 정리" 같은 결론 암시 부제 금지 (클릭 동기를 약화시킴)
-- 대신 참여 유도형 사용: "당신의 선택은?", "너라면?", "결과가 충격적"
+- ⚠️ "당신의 선택은?" 패턴을 남발하지 말 것! 아래 패턴 중 랜덤으로 골라 사용:
+  * 도발형: "이거 고르면 진짜 이상한 사람" / "반박 불가 결론"
+  * 통계형: "99%가 틀리는 선택" / "한국인 73%가 고른 답"
+  * 도전형: "3초 안에 골라봐" / "이거 맞추면 IQ 130"
+  * 충격형: "결과가 충격적" / "마지막에 반전 있음"
+  * 공감형: "솔직히 이건 답 나왔잖아" / "이것도 고민하는 사람 있어?"
+  * 시리즈형: "너라면?" / "골라봐"
 - 선택지를 구체적으로: "과거 여행" 대신 "2009년 비트코인 사러 가기"처럼 상황 묘사
+- 직전 영상 제목과 다른 패턴을 사용할 것
 - 40자 이내
 
 ## 설명 규칙
@@ -182,7 +206,13 @@ async def _generate_script(topic: str, detail: str) -> dict:
         messages=[{"role": "user", "content": prompt}],
     )
 
-    return _parse_json_response(message.content[0].text)
+    script = _parse_json_response(message.content[0].text)
+
+    # 에피소드 번호 강제 삽입 (LLM이 누락한 경우 대비)
+    if f"#{episode_number}" not in script["title"]:
+        script["title"] = f"#{episode_number} {script['title']}"
+
+    return script
 
 
 async def _generate_tts(narration: str) -> str:

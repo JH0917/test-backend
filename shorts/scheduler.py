@@ -37,21 +37,21 @@ def _cleanup_temp_files():
 
 
 def start_scheduler():
-    """매일 10:00, 22:00 KST에 쇼츠를 생성/업로드하는 스케줄러를 시작한다."""
+    """매일 12:00, 18:00 KST에 쇼츠를 생성/업로드하는 스케줄러를 시작한다."""
     scheduler.add_job(
         _run_daily_job,
-        trigger=CronTrigger(hour=10, minute=0, timezone="Asia/Seoul"),
-        id="daily_shorts_morning",
+        trigger=CronTrigger(hour=12, minute=0, timezone="Asia/Seoul"),
+        id="daily_shorts_lunch",
         replace_existing=True,
     )
     scheduler.add_job(
         _run_daily_job,
-        trigger=CronTrigger(hour=22, minute=0, timezone="Asia/Seoul"),
-        id="daily_shorts_night",
+        trigger=CronTrigger(hour=18, minute=0, timezone="Asia/Seoul"),
+        id="daily_shorts_evening",
         replace_existing=True,
     )
     scheduler.start()
-    logger.info("쇼츠 스케줄러 시작 (매일 10:00, 22:00 KST)")
+    logger.info("쇼츠 스케줄러 시작 (매일 12:00, 18:00 KST)")
 
 
 def stop_scheduler():
