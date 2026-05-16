@@ -79,23 +79,26 @@ async def _generate_branding_with_ai(topic: str, detail: str) -> dict:
 async def _generate_dalle_image(prompt: str, size: str) -> str | None:
     """DALL-E 3로 이미지를 생성한다."""
     try:
+        import base64 as b64module
+        # dall-e-3 폐기됨 → gpt-image-1 사용. 사이즈 매핑: 1792x1024→1536x1024
+        size_map = {"1792x1024": "1536x1024", "1024x1792": "1024x1536"}
+        mapped_size = size_map.get(size, size)
+
         client = openai.OpenAI(api_key=OPENAI_API_KEY)
         response = await asyncio.to_thread(
             client.images.generate,
-            model="dall-e-3",
+            model="gpt-image-1",
             prompt=prompt,
-            size=size,
-            quality="standard",
+            size=mapped_size,
+            quality="medium",
             n=1,
         )
-        image_url = response.data[0].url
 
+        img_b64 = response.data[0].b64_json
         run_id = uuid.uuid4().hex[:8]
         path = os.path.join(tempfile.gettempdir(), f"dalle_{run_id}.png")
-        async with httpx.AsyncClient(timeout=60) as http_client:
-            resp = await http_client.get(image_url)
-            with open(path, "wb") as f:
-                f.write(resp.content)
+        with open(path, "wb") as f:
+            f.write(b64module.b64decode(img_b64))
         return path
     except Exception as e:
         logger.error(f"DALL-E 이미지 생성 실패: {e}")

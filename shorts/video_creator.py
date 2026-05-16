@@ -254,21 +254,19 @@ async def _generate_scene_images(scenes: list[dict]) -> list[str]:
 
             response = await asyncio.to_thread(
                 client.images.generate,
-                model="dall-e-3",
+                model="gpt-image-1",
                 prompt=full_prompt,
-                size="1024x1792",
-                quality="standard",
+                size="1024x1536",
+                quality="medium",
                 n=1,
             )
 
-            image_url = response.data[0].url
-
-            async with httpx.AsyncClient(timeout=60) as http_client:
-                img_resp = await http_client.get(image_url)
-                path = os.path.join(tempfile.gettempdir(), f"shorts_dalle_{run_id}_{i}.png")
-                with open(path, "wb") as f:
-                    f.write(img_resp.content)
-                image_paths.append(path)
+            import base64 as b64module
+            img_b64 = response.data[0].b64_json
+            path = os.path.join(tempfile.gettempdir(), f"shorts_dalle_{run_id}_{i}.png")
+            with open(path, "wb") as f:
+                f.write(b64module.b64decode(img_b64))
+            image_paths.append(path)
         except Exception as e:
             logger.error(f"DALL-E 장면 {i} 생성 실패: {e}")
             fallback_path = _create_fallback_background(run_id, i)
