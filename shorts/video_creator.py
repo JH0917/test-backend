@@ -201,7 +201,7 @@ async def _generate_script(topic: str, detail: str) -> dict:
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     message = await asyncio.to_thread(
         client.messages.create,
-        model="claude-sonnet-4-6-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1500,
         messages=[{"role": "user", "content": prompt}],
     )
