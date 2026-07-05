@@ -45,12 +45,24 @@ def _upload_sync(video_path: str, title: str, description: str, tags: list[str])
     """동기 업로드 실행."""
     youtube = _get_authenticated_service()
 
+    # 해시태그 5개 (설명 앞에 배치)
+    hashtags = "#밸런스게임 #양자택일 #Shorts #쇼츠 #결론내드립니다"
+    full_description = (
+        f"{hashtags}\n\n"
+        f"{description}\n\n"
+        "매일 새로운 밸런스게임 결론! 구독하고 알림 설정 🔔\n"
+        "여러분의 선택은? 댓글로 알려주세요!"
+    )
+    # 태그 8~10개 (고정 태그 우선 + 주제별)
+    base_tags = ["Shorts", "밸런스게임", "양자택일", "결론내드립니다", "쇼츠", "밸런스게임결론", "황금밸런스", "이것저것"]
+    all_tags = list(dict.fromkeys(base_tags + tags))[:10]
+
     body = {
         "snippet": {
             "title": title,
-            "description": f"{description}\n\n#밸런스게임 #양자택일 #Shorts",
-            "tags": list(dict.fromkeys(tags + ["Shorts", "밸런스게임", "양자택일"])),
-            "categoryId": "22",
+            "description": full_description,
+            "tags": all_tags,
+            "categoryId": "24",
         },
         "status": {
             "privacyStatus": "public",

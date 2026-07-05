@@ -144,21 +144,25 @@ def _parse_json_response(response_text: str) -> dict:
 
 def _pick_unused_question(history: list[dict]) -> str:
     """히스토리에서 사용하지 않은 질문을 랜덤으로 뽑는다."""
-    used_titles = {ep["title"].lower() for ep in history}
-    # 히스토리 제목에 질문의 핵심 키워드가 포함되어 있는지로 판단
+    # 1차: question 필드로 정확 매칭 (신규 히스토리)
+    used_questions = {ep["question"] for ep in history if "question" in ep}
+    # 2차: question 필드 없는 구 히스토리는 제목에서 vs 양쪽 핵심어로 매칭
+    used_titles = {ep["title"] for ep in history if "question" not in ep and "title" in ep}
+
     unused = []
     for q in BALANCE_QUESTIONS:
-        # "A vs B"에서 A, B 추출
-        parts = [p.strip().lower() for p in q.replace("vs", " ").split() if len(p.strip()) >= 2]
-        already_used = False
-        for title in used_titles:
-            # 핵심 단어 2개 이상이 기존 제목에 포함되면 사용된 것으로 판단
-            match_count = sum(1 for p in parts if p in title)
-            if match_count >= 2:
-                already_used = True
-                break
-        if not already_used:
-            unused.append(q)
+        if q in used_questions:
+            continue
+        # 구 히스토리 호환: vs 양쪽에서 2자 이상 단어를 모두 추출, 절반 이상 매칭 시 사용된 것으로 판단
+        if used_titles and " vs " in q:
+            a_side, b_side = q.split(" vs ", 1)
+            keywords = [w for w in a_side.split() + b_side.split() if len(w) >= 2 and w != "vs"]
+            if keywords and any(
+                sum(1 for kw in keywords if kw in title) >= max(2, len(keywords) // 2)
+                for title in used_titles
+            ):
+                continue
+        unused.append(q)
 
     if not unused:
         logger.warning("모든 질문이 소진됨! 전체 목록에서 랜덤 선택")

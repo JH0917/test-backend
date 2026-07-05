@@ -91,11 +91,18 @@ async def _channel_branding_pipeline():
 async def _create_pipeline():
     """파이프라인: 영상 생성 → 업로드 → 히스토리 저장 → 정리. (질문은 이미 설정된 것 사용)"""
     try:
+        import os
         import shorts.trend_analyzer as trend_module
         from shorts.scheduler import _cleanup_temp_files
 
         video_path = await create_shorts_video()
         logger.info(f"영상 생성: {video_path}")
+
+        # 영상 파일 검증 (100KB 미만이면 비정상)
+        if not os.path.exists(video_path) or os.path.getsize(video_path) < 100_000:
+            logger.error(f"영상 파일 비정상 (크기: {os.path.getsize(video_path) if os.path.exists(video_path) else 0}). 업로드 중단.")
+            _cleanup_temp_files()
+            return
 
         script = vc_module.last_generated_script
         if not script:
@@ -109,15 +116,16 @@ async def _create_pipeline():
             tags=script["tags"],
         )
         logger.info(f"업로드 완료: {result}")
-        _save_episode(script["title"], script["description"], trend_module.current_keywords)
+        _save_episode(script["title"], script["description"], trend_module.current_keywords, trend_module.current_topic_detail)
         _cleanup_temp_files()
     except Exception as e:
-        logger.error(f"파이프라인 실패: {e}", exc_info=True)
+        logger.error(f"파이프라인 실패 (업로드 안 함): {e}", exc_info=True)
 
 
 async def _full_pipeline():
     """파이프라인: 질문 선정 → 영상 생성 → 업로드 → 히스토리 저장 → 정리."""
     try:
+        import os
         from shorts.trend_analyzer import pick_daily_question
         import shorts.trend_analyzer as trend_module
         from shorts.scheduler import _cleanup_temp_files
@@ -128,6 +136,12 @@ async def _full_pipeline():
         video_path = await create_shorts_video()
         logger.info(f"영상 생성: {video_path}")
 
+        # 영상 파일 검증 (100KB 미만이면 비정상)
+        if not os.path.exists(video_path) or os.path.getsize(video_path) < 100_000:
+            logger.error(f"영상 파일 비정상 (크기: {os.path.getsize(video_path) if os.path.exists(video_path) else 0}). 업로드 중단.")
+            _cleanup_temp_files()
+            return
+
         script = vc_module.last_generated_script
         if not script:
             logger.error("스크립트 캐시가 없습니다")
@@ -140,7 +154,7 @@ async def _full_pipeline():
             tags=script["tags"],
         )
         logger.info(f"업로드 완료: {result}")
-        _save_episode(script["title"], script["description"], trend_module.current_keywords)
+        _save_episode(script["title"], script["description"], trend_module.current_keywords, trend_module.current_topic_detail)
         _cleanup_temp_files()
     except Exception as e:
-        logger.error(f"파이프라인 실패: {e}", exc_info=True)
+        logger.error(f"파이프라인 실패 (업로드 안 함): {e}", exc_info=True)
