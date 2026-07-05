@@ -133,6 +133,25 @@ BALANCE_QUESTIONS = [
     "내 그림자가 5초 늦게 따라옴 vs 내 메아리가 다른 말을 함",
 ]
 
+# 댓글이 갈리기 쉬운 고열도 질문. 새 영상은 이 풀을 우선 사용한다.
+HIGH_HEAT_QUESTIONS = [
+    "내 검색 기록 전체 공개 vs 내 카톡 전체 공개",
+    "틱톡에 내 흑역사 영상 1000만뷰 vs 유튜브에 내 방 공개 영상 100만뷰",
+    "전 애인한테 3년 전 카톡 다시 보내짐 vs 직장 단톡방에 혼잣말 전송됨",
+    "내 속마음이 하루 종일 자막으로 뜸 vs 내 검색 기록이 매주 가족 단톡방에 올라감",
+    "100억 받고 평생 혼자 살기 vs 월급 200이지만 평생 이상형과 살기",
+    "10억 받고 친구 한 명을 랜덤으로 잃기 vs 돈 안 받고 지금 인간관계 유지",
+    "이상형과 결혼하는데 내 카톡 전부 공개 vs 평범한 사람과 결혼하고 비밀 유지",
+    "평생 민트초코만 먹기 vs 평생 치킨을 소스 없이 먹기",
+    "모든 전 애인이 내 유튜브를 구독함 vs 부모님이 내 인스타 부계정을 발견함",
+    "소개팅 첫날 방귀 소리 전국 생중계 vs 회사 회식에서 전 애인 이름 부르기",
+    "하루 1억 벌지만 모든 말끝에 '냥' 붙이기 vs 평범하게 살기",
+    "알고리즘이 내 흑역사만 추천함 vs 단톡방에 내 셀카만 자동 전송됨",
+    "바퀴벌레 1마리와 1년 동거하고 10억 vs 돈 없이 바퀴벌레 없는 집",
+    "내 미래 배우자가 내 검색기록 봄 vs 내 부모님이 내 카톡 봄",
+    "전국민이 내 첫사랑 편지를 읽음 vs 첫사랑이 내 현재 연애사를 다 봄",
+]
+
 
 def _parse_json_response(response_text: str) -> dict:
     """Claude 응답에서 JSON을 안전하게 추출한다."""
@@ -149,8 +168,9 @@ def _pick_unused_question(history: list[dict]) -> str:
     # 2차: question 필드 없는 구 히스토리는 제목에서 vs 양쪽 핵심어로 매칭
     used_titles = {ep["title"] for ep in history if "question" not in ep and "title" in ep}
 
+    question_pool = list(dict.fromkeys(HIGH_HEAT_QUESTIONS + BALANCE_QUESTIONS))
     unused = []
-    for q in BALANCE_QUESTIONS:
+    for q in question_pool:
         if q in used_questions:
             continue
         # 구 히스토리 호환: vs 양쪽에서 2자 이상 단어를 모두 추출, 절반 이상 매칭 시 사용된 것으로 판단
@@ -166,8 +186,11 @@ def _pick_unused_question(history: list[dict]) -> str:
 
     if not unused:
         logger.warning("모든 질문이 소진됨! 전체 목록에서 랜덤 선택")
-        unused = BALANCE_QUESTIONS
+        unused = question_pool
 
+    hot_unused = [q for q in unused if q in HIGH_HEAT_QUESTIONS]
+    if hot_unused and random.random() < 0.8:
+        return random.choice(hot_unused)
     return random.choice(unused)
 
 
