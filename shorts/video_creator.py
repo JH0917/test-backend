@@ -17,6 +17,7 @@ from moviepy import (
     CompositeVideoClip,
     vfx,
 )
+import moviepy.audio.fx as afx
 from moviepy.audio.AudioClip import CompositeAudioClip
 from PIL import Image, ImageDraw, ImageFont
 from shorts.audio_assets import get_or_generate_sfx, generate_bgm_loop
@@ -700,7 +701,7 @@ async def _compose_video(script: dict, tts_path: str, scene_paths: list[str]) ->
     # 2. BGM (낮은 볼륨)
     try:
         bgm_path = generate_bgm_loop(duration=total_video_duration + 5)
-        bgm = AudioFileClip(bgm_path).with_effects([vfx.MultiplyVolume(0.15)])
+        bgm = AudioFileClip(bgm_path).with_effects([afx.MultiplyVolume(0.15)])
         if bgm.duration > total_video_duration:
             bgm = bgm.subclipped(0, total_video_duration)
         audio_clips.append(bgm)
@@ -712,26 +713,26 @@ async def _compose_video(script: dict, tts_path: str, scene_paths: list[str]) ->
         sfx = get_or_generate_sfx()
 
         # 후킹 임팩트 (0초)
-        impact = AudioFileClip(sfx["impact"]).with_effects([vfx.MultiplyVolume(0.5)])
+        impact = AudioFileClip(sfx["impact"]).with_effects([afx.MultiplyVolume(0.5)])
         impact = impact.with_start(0.0)
         audio_clips.append(impact)
 
         # 장면 전환 whoosh
         for wt in sfx_timestamps["whoosh_times"][:5]:
-            whoosh = AudioFileClip(sfx["whoosh"]).with_effects([vfx.MultiplyVolume(0.3)])
+            whoosh = AudioFileClip(sfx["whoosh"]).with_effects([afx.MultiplyVolume(0.3)])
             whoosh = whoosh.with_start(wt)
             audio_clips.append(whoosh)
 
         # 카운트다운 틱
         if "countdown_start" in sfx_timestamps:
             for tick_i in range(3):
-                tick = AudioFileClip(sfx["tick"]).with_effects([vfx.MultiplyVolume(0.6)])
+                tick = AudioFileClip(sfx["tick"]).with_effects([afx.MultiplyVolume(0.6)])
                 tick = tick.with_start(sfx_timestamps["countdown_start"] + tick_i)
                 audio_clips.append(tick)
 
         # 결론 딩
         if sfx_timestamps["ding"] is not None:
-            ding = AudioFileClip(sfx["ding"]).with_effects([vfx.MultiplyVolume(0.5)])
+            ding = AudioFileClip(sfx["ding"]).with_effects([afx.MultiplyVolume(0.5)])
             ding = ding.with_start(sfx_timestamps["ding"])
             audio_clips.append(ding)
 
