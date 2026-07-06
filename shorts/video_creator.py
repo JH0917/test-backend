@@ -696,9 +696,9 @@ async def _compose_video(script: dict, tts_path: str, scene_paths: list[str]) ->
             whoosh = whoosh.with_start(wt)
             audio_clips.append(whoosh)
 
-        # 카운트다운 틱
+        # 카운트다운 틱 (2초 카운트다운)
         if "countdown_start" in sfx_timestamps:
-            for tick_i in range(3):
+            for tick_i in range(2):
                 tick = AudioFileClip(sfx["tick"]).with_effects([afx.MultiplyVolume(0.6)])
                 tick = tick.with_start(sfx_timestamps["countdown_start"] + tick_i)
                 audio_clips.append(tick)
