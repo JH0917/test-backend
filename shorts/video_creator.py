@@ -94,160 +94,128 @@ async def _generate_script(topic: str, detail: str) -> dict:
     episode_number = len(history) + 1
     last_title = history[-1]["title"] if history else "없음"
 
-    # 매 영상마다 다른 톤과 숏폼 상황극 포맷을 랜덤 선택
+    # 매 영상마다 다른 톤과 포맷을 랜덤 선택
     tones = [
-        "단톡방에서 친구 놀리는 톤 — 짧고 얄밉게, 계속 태클 거는 느낌",
-        "새벽에 커뮤니티 글 읽다가 급발진한 톤 — 과몰입 + 현실 비유",
-        "예능 패널 톤 — 한 명은 말리고 한 명은 더 부추기는 느낌",
-        "현실 시뮬레이션 톤 — 선택하는 순간 벌어지는 망한 장면을 보여줌",
-        "억울한 변호사 톤 — 말도 안 되는 선택을 법정에서 변호하듯 웃김",
-    ]
-    formats = [
-        "단톡방 박제형: 친구들이 A/B를 고르다가 한 명이 이상한 선택해서 단톡방이 터지는 구성",
-        "긴급회의형: 인생대책회의처럼 시작해서 선택지 하나를 사회적으로 매장하는 구성",
-        "법정재판형: A/B를 피고인처럼 세워놓고 증거사진 꺼내듯 몰아붙이는 구성",
-        "생존시뮬레이터형: 선택 직후 1일차/3일차/30일차가 어떻게 망하는지 보여주는 구성",
-        "소개팅참사형: 선택지가 소개팅/회사/가족 앞에서 들켰을 때를 상상하는 구성",
-        "댓글전쟁형: 댓글창에서 A파/B파가 싸우는 모습을 대신 중계하다가 결론 내는 구성",
+        "단톡방에서 친구 저격하는 톤 — 짧고 얄밉게, 웃기면서 찔리게",
+        "새벽 커뮤 급발진 톤 — 과몰입해서 혼자 열받아 하는 느낌",
+        "예능 MC 톤 — 선택지마다 리액션 넣고 관객석 웃음 터뜨리기",
+        "참사 중계 톤 — 선택 직후 벌어지는 재앙을 뉴스 앵커처럼 전달",
+        "선배 톤 — 인생 경험 많은 척 조언하다가 본인도 못 고름",
     ]
     hooks = [
         "잠깐. 이거 고르는 순간 단톡방에서 박제됩니다.",
-        "이 질문은 밸런스게임이 아니라 인성검사입니다.",
-        "친구한테 이거 물어봤다가 5분 동안 정적 흘렀습니다.",
-        "둘 중 하나 고르면 인생 난이도가 갑자기 지옥불입니다.",
-        "이건 고민하면 안 됩니다. 고민하는 순간 이미 위험합니다.",
-        "댓글창 터질 질문 가져왔습니다. 진짜 싸우지 마세요.",
-        "이 선택은 엄마 앞에서 설명 가능해야 인정입니다.",
+        "이건 밸런스게임이 아니라 인성검사입니다.",
+        "친구한테 물어봤다가 5분 동안 정적 흘렀습니다.",
+        "이건 고민하면 안 됩니다. 고민 자체가 위험합니다.",
+        "댓글창 터질 질문 가져왔습니다.",
+        "엄마 앞에서 설명해보세요. 못 하면 틀린 겁니다.",
+        "이거 잘못 고르면 사회적으로 끝납니다.",
+        "솔직히 이거 3초 안에 못 고르면 문제 있는 겁니다.",
+        "이 질문 만든 사람이 진짜 나쁜 사람입니다.",
     ]
     tone = random.choice(tones)
-    format_style = random.choice(formats)
     hook = random.choice(hooks)
 
     prompt = f"""당신은 유튜브 쇼츠 밸런스게임 콘텐츠 스크립트 작가입니다.
+조회수 100만 이상 바이럴 쇼츠만 만드는 전문가입니다.
 
-⚠️ 이번 밸런스게임 질문 (반드시 이 질문으로 스크립트를 작성할 것!):
-{detail}
+⚠️ 질문: {detail}
+⚠️ 에피소드: #{episode_number}
+⚠️ 직전 제목: "{last_title}" — 다른 패턴 사용!
+⚠️ 톤: {tone}
+⚠️ 첫 문장: "{hook}"
 
-⚠️ 이번 에피소드 번호: #{episode_number} (제목에 반드시 포함할 것. 예: "#{episode_number} 치킨vs피자 3초 안에 골라봐")
-⚠️ 직전 영상 제목: "{last_title}" — 이와 다른 제목 패턴을 사용할 것!
+## 핵심 원칙
+이 영상은 "분석"이 아니라 "상황극"입니다.
+시청자가 웃는 건 논리가 아니라 "아 ㅋㅋㅋ 저건 진짜 망했다" 하는 장면입니다.
+매 문장이 새로운 그림을 그려야 합니다. 같은 말 반복하면 스와이프 당합니다.
 
-⚠️ 이번 영상 톤: {tone}
-⚠️ 이번 영상 포맷: {format_style}
-⚠️ 첫 문장 후킹: "{hook}"
+## 6컷 구조 (정확히 6장면, 더 넣지 말 것)
+1. 🔥 훅 + 질문: "{hook}" 후 바로 "A vs B. 결론 내드립니다."
+2. 😱 A 선택 시 벌어지는 현실 (웃긴 참사 장면 2~3개 빠르게)
+3. 💀 B 선택 시 벌어지는 현실 (A보다 더 극적인 참사)
+4. 🤔 양쪽 비교하며 갈등 (어? 근데 이거 은근 고민되는데?)
+5. ⚡ 결론 선언 — 확신에 찬 한마디 + 펀치라인
+6. 🔁 "여러분 선택은?" + 떡밥 (첫 장면 질문을 다시 상기시키며 루프)
 
-## 채널 컨셉
-"밸런스게임 결론내기" — 선택지를 분석하는 채널이 아니라, 선택하는 순간 벌어지는 웃긴 참사를 보여주고 한쪽을 과감하게 찍어주는 채널.
+## 재미 엔진 — 이걸 안 넣으면 영상이 죽습니다
+- 최소 3개의 "구체적 현실 장면" 필수:
+  소개팅에서 들킴, 단톡방 폭발, 엄마가 방문 열음, 회사 프레젠테이션 중, 지하철 옆사람 표정, 전애인 SNS에 올라감, 편의점 CCTV에 찍힘
+- 최소 2개의 "밈급 비유" 필수:
+  "인생 난이도 DLC", "사회적 사망 선고", "영혼 탈곡기", "멘탈 포맷", "인간관계 공장초기화"
+- 한쪽 팬 도발 필수: "B파 지금 화났죠?", "A 고른 사람 손?", "이거 고른 사람 진심?"
 
-## 핵심 변경: 분석문 금지, 숏폼 상황극으로 쓸 것
-- 이 영상은 논리 발표가 아니라 "댓글창 터질 만한 상황극"입니다.
-- 시청자가 웃는 지점은 근거가 아니라 "아 저건 진짜 망했다" 싶은 현실 장면입니다.
-- 매 1~2문장마다 새로운 그림이 떠올라야 합니다. 같은 설명을 길게 끌지 마세요.
-- "결론 내드립니다"는 1회만 사용하세요. 반복하면 재미가 죽습니다.
+## 참고 스크립트 (이 수준의 재미와 속도감을 반드시 따를 것!)
 
-## 8컷 구조 (필수)
-1. 훅: 반드시 "{hook}"로 시작하고 바로 질문을 던지기
-2. A 선택 직후 벌어지는 첫 참사
-3. A가 생각보다 괜찮아 보이는 반전
-4. A의 치명적 웃긴 단점
-5. B 선택 직후 벌어지는 더 큰 참사
-6. B가 댓글창에서 옹호받는 이유
-7. 카운트다운 직전 결론 떡밥: "3초 뒤에 찍습니다"
-8. 결론 + 댓글 싸움 유도: 반드시 한쪽 선택, 마지막은 "여러분 선택은?"
+참고1 (160자, 검색기록 vs 카톡):
+"이건 인성검사입니다. 검색기록 공개 vs 카톡 공개. 결론 내드립니다. 검색기록요? 새벽 2시 검색 다 압니다. 근데 사람들 하루면 잊어요. 카톡은요? 친구 뒷담, 전애인 장문, 엄마한테 거짓말. 풀HD 다큐멘터리입니다. 공개되는 순간 단톡방 이름이 '해명해'로 바뀝니다. 결론. 검색기록. 창피한 건 하루고 카톡은 인간관계 압수입니다. 카톡파 댓글로 변론하세요. 여러분 선택은?"
 
-## 재미 엔진 규칙
-- 최소 4개 이상의 "구체적 현실 장면"을 넣으세요.
-  예: 단톡방 캡처, 엄마가 방문 열고 봄, 회사 회식자리, 소개팅 첫 만남, 지하철 옆자리, 편의점 알바 표정, 친구가 릴스에 올림.
-- 한쪽을 깔 때는 추상어 금지. "불편하다" 말고 "단톡방 이름이 너 때문에 바뀐다"처럼 장면으로 말하세요.
-- 웃긴 비유를 최소 3개 넣으세요.
-  예: "인생 난이도 DLC", "사회적 사망 버튼", "알고리즘이 부모님께 추천하는 재앙".
-- 댓글이 갈릴 포인트를 일부러 남기세요. "A파 지금 화났죠?" 같은 멘트 OK.
-- 과몰입은 허용하지만 욕설/혐오/성적 표현은 금지.
+참고2 (170자, 100억 혼자 vs 가난한 사랑):
+"댓글창 싸움 예약입니다. 100억 혼자 vs 가난한 사랑. 결론 내드립니다. 가난한 사랑요? 월세날부터 장르가 바뀝니다. 로맨스인 줄 알았는데 생존 스릴러. 치킨 한 마리에 가족회의합니다. 100억은요? 외롭습니다. 근데 80평에서 외로운 겁니다. 울어도 한강뷰. 문제는 생일. 케이크 초를 혼자 끕니다. 결론. 100억. 외로움은 버티는데 카드값 독촉은 못 버팁니다. 여러분 선택은?"
 
-## 절대 금지 표현
-- "자 일단", "근데 잘 생각해보세요", "핵심은", "가장 강력한 근거", "정답 쪽", "반대쪽"
-- 교과서식 비교, 장황한 설명, 착한 결론, 양쪽 다 좋다는 마무리
-- 가짜 통계 남발. 통계형 제목은 쓰지 말 것.
+참고3 (150자, 바퀴벌레 동거 vs 돈):
+"잠깐. 이거 고르는 순간 멘탈 포맷됩니다. 바퀴벌레랑 1년 동거하고 10억 vs 돈 없이 깨끗한 집. 결론 내드립니다. 바퀴벌레 동거요? 첫날. 거실에 있습니다. 눈 마주칩니다. 일주일 후. 이름 붙여줍니다. 한 달 후. 걔가 내 방입니다. 근데 10억이잖아요. 10억이면 동거 끝나고 바로 해외 도피 가능합니다. 결론. 동거. 1년 참으면 평생 삽니다. 깨끗한 집파 솔직히 부럽죠? 여러분 선택은?"
 
-## 참고 스크립트 — 새 스타일
+참고4 (165자, 전애인 카톡 vs 직장 단톡):
+"이 질문 만든 사람이 진짜 나쁜 사람입니다. 전애인한테 3년 전 카톡 재전송 vs 직장 단톡방에 혼잣말 전송. 결론 내드립니다. 전애인 카톡요? 새벽에 보낸 그거 다시 갑니다. 읽씹당하면 그나마 다행. 답장 오면 진짜 끝납니다. 직장 단톡은요? 부장님한테 '아 퇴근하고싶다' 날아갑니다. 월요일 아침에. 회의실 불려갑니다. 결론. 전애인. 전애인은 차단하면 끝인데 부장님은 내일도 봐야 합니다. 여러분 선택은?"
 
-참고1 (랜덤 나라 vs 같은 방):
-"잠깐. 이거 고르는 순간 여권이 아니라 멘탈이 먼저 찢깁니다. 매일 랜덤 나라에서 깨어나기 vs 평생 같은 방. 결론 내드립니다. 랜덤 나라요? 첫날은 낭만입니다. 눈 떴는데 파리. 오 좋다. 둘째 날은 사막. 셋째 날은 공항 노숙. 넷째 날부터 엄마가 전화합니다. 너 지금 어느 나라야? 본인도 모릅니다. 근데 같은 방은요. 처음엔 안정적이죠. 침대 있고 와이파이 있고. 근데 30일 지나면 벽지 무늬랑 대화합니다. 1년 지나면 방구석이 직장이고 여행지고 장례식장입니다. 3초 뒤에 찍습니다. 결론. 랜덤 나라. 적어도 인생이 로딩 화면은 아니잖아요. 같은 방파 지금 화났죠? 여러분 선택은?"
+참고5 (140자, 냄새 vs 외모):
+"솔직히 이거 3초 안에 못 고르면 문제 있는 겁니다. 외모 완벽 냄새 지옥 vs 외모 별로 향기 천국. 결론 내드립니다. 완벽 외모요? 카페 들어갑니다. 다 쳐다봅니다. 근데 5초 후 다 고개 돌립니다. 엘리베이터에서 둘이 타면 신고 들어옵니다. 향기 쪽은요? 스쳐지나가면 뒤돌아봅니다. 근데 얼굴 보고 다시 돌아섭니다. 결론. 향기. 외모는 눈 감으면 끝인데 냄새는 코를 못 막습니다. 여러분 선택은?"
 
-참고2 (검색기록 공개 vs 카톡 공개):
-"이건 밸런스게임이 아니라 사회적 사망 버튼입니다. 검색기록 공개 vs 카톡 공개. 결론 내드립니다. 검색기록요? 민망합니다. 새벽 2시에 이상한 거 검색한 거 다 압니다. 근데 사람들은 하루면 잊어요. 문제는 카톡입니다. 카톡은 증거가 아니라 다큐멘터리예요. 친구 욕한 거, 전애인한테 쓴 장문, 엄마한테 거짓말한 시간까지 풀HD입니다. 단톡방에 올라가는 순간 이름이 '해명해'로 바뀝니다. 3초 뒤에 찍습니다. 결론. 검색기록 공개. 창피한 건 하루고 카톡은 인간관계 압수입니다. 카톡파 있으면 댓글로 변론하세요. 여러분 선택은?"
+## 문체 규칙
+- 한 문장 최대 25자! 이거 넘기면 지루합니다.
+- 문장 끝 다양하게: "끝.", "망.", "압수.", "박제.", "탈출 불가.", "바로 신고."
+- "~거든요" 3회 이상 반복 금지.
+- 설명 말고 장면. 근거 말고 그림. 착한 말 말고 댓글 폭탄.
 
-참고3 (100억 혼자 vs 가난한 사랑):
-"댓글창 싸움 예약입니다. 100억 부자인데 평생 혼자 vs 가난하지만 사랑하는 사람. 결론 내드립니다. 사랑 좋죠. 근데 가난한 사랑은 월세날부터 장르가 바뀝니다. 로맨스인 줄 알았는데 생활고 스릴러예요. 치킨 한 마리에도 회의합니다. 반대로 100억 혼자는요? 외롭습니다. 근데 외로운 집이 80평입니다. 울어도 한강뷰 앞에서 울어요. 문제는 생일입니다. 케이크 초를 혼자 끕니다. 박수도 셀프예요. 3초 뒤에 찍습니다. 결론. 100억 혼자. 외로움은 힘든데 카드값 독촉은 더 무섭습니다. 사랑파 반박 받습니다. 여러분 선택은?"
-
-## 톤 & 문체 규칙
-- 한 문장 최대 28자. 숨 쉴 틈 없이 짧게.
-- 문장 끝을 계속 "~거든요"로 반복하지 말 것. "끝.", "망했습니다.", "이건 압수.", "바로 박제."처럼 끊기.
-- 설명보다 장면. 근거보다 짤감. 착함보다 댓글 유발.
-- 반말/존댓말 섞기 OK. 단, 사람/집단 비하 금지.
-- TTS가 읽었을 때 리듬이 살아야 함: 짧은 문장 3개 + 한 줄 펀치라인 패턴.
-
-## 금지 사항
-- ❌ 교훈적 마무리
-- ❌ 양쪽 다 좋다는 애매한 결론
-- ❌ 딱딱한 분석
-- ❌ 욕설, 음란한 내용, 혐오 표현
-- ❌ 실제 특정 개인을 조롱하는 표현
+## 절대 금지
+- "자 일단", "잘 생각해보세요", "핵심은", "강력한 근거" — 이런 거 쓰면 채널 망합니다
+- 장황한 설명, 교훈, 양비론, 가짜 통계
+- "~이기 때문입니다", "~할 수 있습니다" 같은 문어체
 
 ## 구성
-- 총 28~38초 영상 (나레이션 240~340자)
-- 8개 장면으로 구성 (빠른 컷 전환)
-- 각 장면 2.5~4.5초
-- 각 장면에 화면에 표시할 큰 자막 텍스트(10자 이내, 핵심 키워드 위주)
-- 각 장면에 DALL-E용 배경 설명 (영어, 실사 사진 스타일, 35mm 필름 느낌의 부드러운 톤, 자연스러운 표정, 장면마다 다른 구도)
-- 각 장면에 Runway 영상 변환용 모션 설명 (영어, 장면 안에서 일어나는 구체적 동작/움직임 묘사)
-- 1번 장면: 질문 제시 (image_prompt_a: A 선택지 이미지, image_prompt_b: B 선택지 이미지 — 분할화면용)
-- 2~6번 장면: 위 8컷 구조에 맞는 상황극 장면
-- 7번 장면: 결론 떡밥 (image_prompt는 "Pure black background"로 고정)
-- 8번 장면: 댓글 유도 "여러분 선택은?" (image_prompt는 "Pure black background"로 고정)
-- ⚠️ 7번과 8번 사이에 3초 카운트다운이 자동 삽입됩니다 (스크립트에는 포함하지 마세요)
+- 총 22~32초 영상 (나레이션 160~250자)
+- 정확히 6개 장면
+- 각 장면 3~5초
+- 각 장면에 화면 자막 텍스트 (8자 이내! 짧을수록 임팩트)
+- 각 장면에 DALL-E 이미지 프롬프트 (영어, 아래 스타일 가이드 참고)
+- 1번 장면: image_prompt_a + image_prompt_b (분할화면용)
+- 2~4번 장면: 상황극 장면 (표정, 리액션이 핵심!)
+- 5번 장면: 결론 (image_prompt는 "Pure black background"로 고정)
+- 6번 장면: 댓글 유도 (image_prompt는 "Pure black background"로 고정)
+- ⚠️ 5번과 6번 사이에 카운트다운이 자동 삽입됩니다
+
+## 이미지 프롬프트 스타일 가이드
+- "editorial photograph" 대신 → "cinematic close-up" 또는 "dramatic wide shot" 사용
+- 사람의 과장된 표정이 핵심: shocked face, disgusted expression, crying while laughing, jaw-dropping moment
+- 색감: 네온 조명, 강한 명암 대비, 영화 같은 컬러 그레이딩
+- 예시: "Cinematic close-up of a Korean man in his 20s looking at his phone with a horrified expression, neon blue lighting, dramatic shadows, 35mm film grain"
+- 추상적 배경 금지. 구체적 장소와 상황이 있어야 함.
 
 ## 제목 규칙
-- 결론을 제목에서 말하지 말 것. 클릭 이유가 사라집니다.
-- 가짜 통계, IQ, 천재 테스트 금지. 촌스럽습니다.
-- 아래 느낌으로 짧고 센 제목:
-  * "이거 고르면 단톡방 박제됨"
-  * "엄마 앞에서 설명 가능?"
-  * "둘 중 하나면 인생 난이도 지옥"
-  * "댓글창 싸움 예약"
-  * "이 선택은 진짜 못 살린다"
-- 선택지를 구체적으로 압축: "랜덤 나라 vs 같은 방", "검색기록 vs 카톡", "100억 혼자 vs 가난한 사랑"
-- 직전 영상 제목과 다른 패턴을 사용할 것
-- 40자 이내
+- 짧고 자극적. 30자 이내.
+- "이거 고르면 단톡방 박제됨", "엄마한테 설명 가능?", "댓글창 전쟁 예약"
+- 선택지 압축: "검색기록 vs 카톡", "10억 냄새 vs 0원 향기"
 
-## 설명 규칙
-- 주제 키워드를 자연어로 포함 (SEO 최적화)
-- 예: "치킨과 피자 중 하나를 평생 포기해야 한다면? 밸런스게임 결론!"
-- 100자 이내
-
-## 태그 규칙
-- 처음 3개는 고정: "밸런스게임", "양자택일", "shorts"
-- 나머지 5~7개는 해당 주제 키워드 (총 8~10개)
-
-다음 JSON 형식으로만 응답하세요:
+다음 JSON으로만 응답:
 {{
-    "title": "영상 제목 (참여 유도형, 선정적 표현 금지, 40자 이내)",
-    "description": "영상 설명 (주제 키워드 포함, 100자 이내)",
-    "tags": ["밸런스게임", "양자택일", "shorts", "결론내드립니다", "쇼츠", "주제태그1", "주제태그2", "주제태그3"],
-    "narration": "전체 나레이션 (구어체. 240~340자. 반드시 한쪽을 선택하는 결론 포함)",
+    "title": "제목 (30자 이내)",
+    "description": "설명 (80자 이내)",
+    "tags": ["밸런스게임", "양자택일", "shorts", "결론내드립니다", "쇼츠", ...],
+    "narration": "나레이션 (160~250자, 구어체, 반드시 한쪽 선택)",
     "scenes": [
         {{
-            "text": "큰 자막 텍스트 (10자 이내, 핵심 키워드)",
+            "text": "자막 (8자 이내)",
             "duration": 4.0,
-            "image_prompt": "Editorial photograph of ... (English, 35mm film style)",
-            "image_prompt_a": "(1번 장면만!) A 선택지 이미지 프롬프트 (English)",
-            "image_prompt_b": "(1번 장면만!) B 선택지 이미지 프롬프트 (English)",
-            "motion_prompt": "구체적 동작 묘사 (English, e.g. 'The man takes a bite and his eyes widen')"
+            "image_prompt": "Cinematic ... (English)",
+            "image_prompt_a": "(1번만) A 이미지",
+            "image_prompt_b": "(1번만) B 이미지",
+            "motion_prompt": "동작 (English)"
         }}
     ]
 }}
 
-⚠️ 1번 장면에는 반드시 image_prompt_a와 image_prompt_b를 포함할 것! (분할화면용)
-⚠️ 2~8번 장면에는 image_prompt만 사용할 것!"""
+⚠️ 정확히 6개 장면! 1번만 image_prompt_a/b, 나머지는 image_prompt만!"""
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     message = await asyncio.to_thread(
@@ -265,11 +233,11 @@ async def _generate_script(topic: str, detail: str) -> dict:
 
     # LLM 출력 검증 (장면 수, 나레이션 길이)
     scene_count = len(script.get("scenes", []))
-    if scene_count != 8:
-        logger.warning(f"장면 수 {scene_count}개 (기대: 8개)")
+    if scene_count != 6:
+        logger.warning(f"장면 수 {scene_count}개 (기대: 6개)")
     narration_len = len(script.get("narration", ""))
-    if not (220 <= narration_len <= 370):
-        logger.warning(f"나레이션 {narration_len}자 (기대: 240~340자)")
+    if not (140 <= narration_len <= 280):
+        logger.warning(f"나레이션 {narration_len}자 (기대: 160~250자)")
     logger.info(f"생성된 제목: {script.get('title')}")
     logger.info(f"생성된 나레이션: {script.get('narration')}")
 
@@ -290,7 +258,7 @@ async def _generate_tts(narration: str) -> str:
             "stability": 0.35,
             "similarity_boost": 0.75,
             "style": 0.6,
-            "speed": 1.2,
+            "speed": 1.3,
         },
     )
 
@@ -389,16 +357,16 @@ def _load_font(size: int):
 
 
 def _create_countdown_frames(run_id: str) -> list[str]:
-    """3, 2, 1 카운트다운 이미지 프레임을 생성한다."""
+    """2, 1 카운트다운 이미지 프레임을 생성한다."""
     frames = []
-    colors = [(255, 80, 80), (255, 180, 50), (80, 255, 80)]  # 빨-주-초
+    colors = [(255, 80, 80), (80, 255, 80)]  # 빨-초
 
-    for i, (num, color) in enumerate(zip([3, 2, 1], colors)):
+    for i, (num, color) in enumerate(zip([2, 1], colors)):
         img = Image.new("RGB", (WIDTH, HEIGHT), (15, 15, 25))
         draw = ImageDraw.Draw(img)
 
         # 큰 숫자
-        font = _load_font(200)
+        font = _load_font(240)
         text = str(num)
         bbox = draw.textbbox((0, 0), text, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
@@ -406,14 +374,13 @@ def _create_countdown_frames(run_id: str) -> list[str]:
 
         # 글로우 효과
         for offset in range(8, 0, -2):
-            glow_color = (*color, 60)
             draw.text((x - offset, y), text, font=font, fill=color)
             draw.text((x + offset, y), text, font=font, fill=color)
         draw.text((x, y), text, font=font, fill=(255, 255, 255))
 
         # "결론 공개" 텍스트
-        sub_font = _load_font(40)
-        sub_text = "결론 공개까지..."
+        sub_font = _load_font(44)
+        sub_text = "결론 공개"
         sb = draw.textbbox((0, 0), sub_text, font=sub_font)
         sw = sb[2] - sb[0]
         draw.text(((WIDTH - sw) // 2, y + th + 40), sub_text, font=sub_font, fill=(200, 200, 200))
@@ -432,12 +399,12 @@ async def _generate_scene_images(scenes: list[dict]) -> list[str]:
 
     client = openai.OpenAI(api_key=OPENAI_API_KEY)
     style_suffix = (
-        "Cinematic editorial photograph, shot on 35mm Kodak Portra 400 film. "
-        "Warm amber and teal color grading, soft golden hour lighting with gentle lens flare. "
-        "Shallow depth of field, natural bokeh background. "
-        "Real people in real settings, authentic expressions, not exaggerated or cartoonish. "
-        "Consistent warm color palette: amber highlights, deep shadows, muted pastels. "
-        "Clean composition, slightly desaturated skin tones, magazine-quality framing. "
+        "Cinematic photograph with dramatic lighting. "
+        "Strong contrast, neon accent colors (blue/orange/red), deep shadows. "
+        "Expressive human faces with exaggerated emotions: shock, disgust, laughter, horror. "
+        "Real people in real settings, dynamic angles (low angle, dutch tilt, extreme close-up). "
+        "Film grain texture, 35mm anamorphic lens feel. "
+        "Vibrant, high-energy, YouTube thumbnail quality. "
         "No text, no letters, no watermarks in the image."
     )
 
@@ -537,7 +504,7 @@ def _create_fallback_background(run_id: str, index: int) -> str:
     return path
 
 
-def _create_text_image(text: str, run_id: str, index: int, total_scenes: int = 8,
+def _create_text_image(text: str, run_id: str, index: int, total_scenes: int = 6,
                        width: int = WIDTH, height: int = HEIGHT) -> str:
     """PIL로 텍스트가 들어간 반투명 오버레이 이미지를 생성한다.
     자막 위치가 장면마다 다양하게 변경된다."""
@@ -547,7 +514,7 @@ def _create_text_image(text: str, run_id: str, index: int, total_scenes: int = 8
     # 첫 프레임은 더 큰 폰트, 마지막 2개도 큰 폰트 (결론/댓글유도)
     is_first = index == 0
     is_conclusion = index >= total_scenes - 2
-    font_size = 80 if (is_first or is_conclusion) else 64
+    font_size = 88 if (is_first or is_conclusion) else 72
     font = _load_font(font_size)
 
     if not text:
@@ -573,29 +540,33 @@ def _create_text_image(text: str, run_id: str, index: int, total_scenes: int = 8
     ]
     y = positions[index % len(positions)]
 
-    padding = 28
+    padding = 32
     if is_first:
-        # 첫 프레임: 강렬한 빨강 배경
+        # 첫 프레임: 강렬한 빨강 + 네온 효과
         draw.rounded_rectangle(
             [x - padding, y - padding, x + text_w + padding, y + text_h + padding],
-            radius=20, fill=(200, 30, 30, 220),
+            radius=24, fill=(220, 20, 20, 230),
         )
     elif is_conclusion:
-        # 결론/댓글 유도: 골드 배경
+        # 결론/댓글 유도: 네온 블루
         draw.rounded_rectangle(
             [x - padding, y - padding, x + text_w + padding, y + text_h + padding],
-            radius=20, fill=(180, 140, 20, 220),
+            radius=24, fill=(20, 80, 220, 230),
         )
     else:
-        # 일반 장면: 검정 반투명
+        # 일반 장면: 검정 반투명 + 테두리
         draw.rounded_rectangle(
             [x - padding, y - padding, x + text_w + padding, y + text_h + padding],
-            radius=16, fill=(0, 0, 0, 180),
+            radius=20, fill=(0, 0, 0, 200),
+        )
+        draw.rounded_rectangle(
+            [x - padding, y - padding, x + text_w + padding, y + text_h + padding],
+            radius=20, outline=(255, 255, 255, 100), width=2,
         )
 
-    # 흰색 큰 글씨 + 테두리 효과
-    for dx, dy in [(-2, -2), (-2, 2), (2, -2), (2, 2)]:
-        draw.text((x + dx, y + dy), text, font=font, fill=(0, 0, 0, 200))
+    # 두꺼운 외곽선 + 흰색 글씨
+    for dx, dy in [(-3, -3), (-3, 3), (3, -3), (3, 3), (-3, 0), (3, 0), (0, -3), (0, 3)]:
+        draw.text((x + dx, y + dy), text, font=font, fill=(0, 0, 0, 230))
     draw.text((x, y), text, font=font, fill=(255, 255, 255, 255))
 
     path = os.path.join(tempfile.gettempdir(), f"shorts_text_{run_id}_{index}.png")
@@ -613,8 +584,8 @@ async def _compose_video(script: dict, tts_path: str, scene_paths: list[str]) ->
     scenes = script["scenes"]
     total_scenes = len(scenes)
 
-    # 카운트다운 3초를 포함한 전체 길이 계산
-    countdown_duration = 3.0
+    # 카운트다운 2초를 포함한 전체 길이 계산
+    countdown_duration = 2.0
     total_video_duration = tts_duration + countdown_duration
 
     # 장면별 시간 비율 계산 (카운트다운 제외)
@@ -622,7 +593,7 @@ async def _compose_video(script: dict, tts_path: str, scene_paths: list[str]) ->
     ratio = tts_duration / total_scene_duration if total_scene_duration > 0 else 1
 
     # 카운트다운 삽입 위치: 결론 장면(마지막에서 2번째) 직전
-    countdown_insert_idx = max(total_scenes - 2, total_scenes // 2)
+    countdown_insert_idx = total_scenes - 2
 
     fade_duration = 0.2  # 빠른 컷을 위해 페이드 줄임
     clips = []
