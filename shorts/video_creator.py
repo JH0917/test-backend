@@ -258,7 +258,7 @@ async def _generate_tts(narration: str) -> str:
             "stability": 0.35,
             "similarity_boost": 0.75,
             "style": 0.6,
-            "speed": 1.3,
+            "speed": 1.2,
         },
     )
 
