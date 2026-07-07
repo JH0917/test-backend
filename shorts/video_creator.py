@@ -185,12 +185,13 @@ async def _generate_script(topic: str, detail: str) -> dict:
 - 6번 장면: 댓글 유도 (image_prompt는 "Pure black background"로 고정)
 - ⚠️ 5번과 6번 사이에 카운트다운이 자동 삽입됩니다
 
-## 이미지 프롬프트 스타일 가이드
-- "editorial photograph" 대신 → "cinematic close-up" 또는 "dramatic wide shot" 사용
-- 사람의 과장된 표정이 핵심: shocked face, disgusted expression, crying while laughing, jaw-dropping moment
-- 색감: 네온 조명, 강한 명암 대비, 영화 같은 컬러 그레이딩
-- 예시: "Cinematic close-up of a Korean man in his 20s looking at his phone with a horrified expression, neon blue lighting, dramatic shadows, 35mm film grain"
-- 추상적 배경 금지. 구체적 장소와 상황이 있어야 함.
+## 이미지 프롬프트 스타일 가이드 (Pixar 3D 스타일!)
+- 모든 이미지는 "Pixar-style 3D animated" 느낌으로 작성
+- 캐릭터의 과장된 표정이 핵심: eyes popping out, jaw on the floor, tears streaming while laughing, comically horrified face
+- 색감: 밝고 채도 높은 컬러, 소프트 조명, 깨끗한 배경
+- 예시: "A cute Pixar-style 3D Korean office worker character with an extremely shocked expression, eyes bulging out, mouth wide open, sitting at a desk piled with documents, bright warm office lighting"
+- 추상적 배경 금지. 구체적 장소와 상황, 과장된 리액션이 있어야 함.
+- ⚠️ "photograph", "photo", "realistic" 같은 단어 절대 사용 금지!
 
 ## 제목 규칙
 - 짧고 자극적. 30자 이내.
@@ -207,7 +208,7 @@ async def _generate_script(topic: str, detail: str) -> dict:
         {{
             "text": "자막 (8자 이내)",
             "duration": 4.0,
-            "image_prompt": "Cinematic ... (English)",
+            "image_prompt": "Pixar-style 3D animated ... (English)",
             "image_prompt_a": "(1번만) A 이미지",
             "image_prompt_b": "(1번만) B 이미지",
             "motion_prompt": "동작 (English)"
@@ -255,9 +256,9 @@ async def _generate_tts(narration: str) -> str:
         voice_id="m3gJBS8OofDJfycyA2Ip",  # Taehyung - Natural, Friendly and Clear
         model_id="eleven_multilingual_v2",
         voice_settings={
-            "stability": 0.35,
-            "similarity_boost": 0.75,
-            "style": 0.6,
+            "stability": 0.2,
+            "similarity_boost": 0.7,
+            "style": 0.9,
             "speed": 1.2,
         },
     )
@@ -399,13 +400,14 @@ async def _generate_scene_images(scenes: list[dict]) -> list[str]:
 
     client = openai.OpenAI(api_key=OPENAI_API_KEY)
     style_suffix = (
-        "Cinematic photograph with dramatic lighting. "
-        "Strong contrast, neon accent colors (blue/orange/red), deep shadows. "
-        "Expressive human faces with exaggerated emotions: shock, disgust, laughter, horror. "
-        "Real people in real settings, dynamic angles (low angle, dutch tilt, extreme close-up). "
-        "Film grain texture, 35mm anamorphic lens feel. "
-        "Vibrant, high-energy, YouTube thumbnail quality. "
-        "No text, no letters, no watermarks in the image."
+        "Pixar-style 3D animated character render. "
+        "Bright, saturated colors with soft studio lighting. "
+        "Cute but expressive characters with HUGE exaggerated facial expressions: "
+        "wide eyes, dropped jaw, crying-laughing, extreme shock, comical horror. "
+        "Smooth plastic-like skin texture, large glossy eyes, slightly oversized head. "
+        "Clean colorful background with bokeh or gradient. "
+        "Disney/Pixar movie quality rendering, 4K detail. "
+        "No text, no letters, no watermarks, no UI elements in the image."
     )
 
     for i, scene in enumerate(scenes):
