@@ -696,12 +696,15 @@ async def _compose_video(script: dict, tts_path: str, scene_paths: list[str]) ->
             whoosh = whoosh.with_start(wt)
             audio_clips.append(whoosh)
 
-        # 카운트다운 틱 (2초 카운트다운)
+        # 카운트다운 틱 — 드럼롤로 대체 (짧은 틱 클립은 MoviePy CompositeAudioClip에서 IOError 발생)
         if "countdown_start" in sfx_timestamps:
-            for tick_i in range(2):
-                tick = AudioFileClip(sfx["tick"]).with_effects([afx.MultiplyVolume(0.6)])
-                tick = tick.with_start(sfx_timestamps["countdown_start"] + tick_i)
-                audio_clips.append(tick)
+            drumroll = AudioFileClip(sfx["drumroll"]).with_effects([afx.MultiplyVolume(0.4)])
+            cd_start = sfx_timestamps["countdown_start"]
+            # 드럼롤 끝 2초만 사용
+            if drumroll.duration > 2.0:
+                drumroll = drumroll.subclipped(drumroll.duration - 2.0, drumroll.duration)
+            drumroll = drumroll.with_start(cd_start)
+            audio_clips.append(drumroll)
 
         # 결론 딩
         if sfx_timestamps["ding"] is not None:
