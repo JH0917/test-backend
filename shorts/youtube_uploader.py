@@ -45,16 +45,15 @@ def _upload_sync(video_path: str, title: str, description: str, tags: list[str])
     """동기 업로드 실행."""
     youtube = _get_authenticated_service()
 
-    # 해시태그 5개 (설명 앞에 배치)
-    hashtags = "#밸런스게임 #양자택일 #Shorts #쇼츠 #결론내드립니다"
+    hashtags = "#whatif #history #ai #shorts #역사IF"
     full_description = (
         f"{hashtags}\n\n"
         f"{description}\n\n"
-        "매일 새로운 밸런스게임 결론! 구독하고 알림 설정 🔔\n"
-        "여러분의 선택은? 댓글로 알려주세요!"
+        "What would happen if history went differently? 🌍\n"
+        "Subscribe for daily 'What If' scenarios! 🔔"
     )
-    # 태그 8~10개 (고정 태그 우선 + 주제별)
-    base_tags = ["Shorts", "밸런스게임", "양자택일", "결론내드립니다", "쇼츠", "밸런스게임결론", "황금밸런스", "이것저것"]
+    base_tags = ["Shorts", "whatif", "history", "ai", "alternatehistory",
+                 "역사IF", "만약에", "쇼츠"]
     all_tags = list(dict.fromkeys(base_tags + tags))[:10]
 
     body = {
@@ -79,46 +78,13 @@ def _upload_sync(video_path: str, title: str, description: str, tags: list[str])
     )
 
     response = request.execute()
-
     video_id = response["id"]
-
-    # 업로드 후 CTA 댓글 자동 작성
-    try:
-        _post_cta_comment(youtube, video_id, title)
-    except Exception as e:
-        logger.warning(f"CTA 댓글 작성 실패 (영상 업로드는 성공): {e}")
 
     return {
         "video_id": video_id,
         "url": f"https://youtube.com/shorts/{video_id}",
         "title": title,
     }
-
-
-def _post_cta_comment(youtube, video_id: str, title: str):
-    """업로드된 영상에 CTA 댓글을 자동으로 작성한다."""
-    comment_text = (
-        f"🔥 {title}\n"
-        "여러분의 선택은? 좋아요 👍 or 댓글 💬로 알려주세요!\n"
-        "다음 문제도 기대해주세요 🔔\n\n"
-        "구독하면 매일 새로운 밸런스게임을 받아볼 수 있어요!"
-    )
-
-    youtube.commentThreads().insert(
-        part="snippet",
-        body={
-            "snippet": {
-                "videoId": video_id,
-                "topLevelComment": {
-                    "snippet": {
-                        "textOriginal": comment_text,
-                    }
-                },
-            }
-        },
-    ).execute()
-
-    logger.info(f"CTA 댓글 작성 완료: {video_id}")
 
 
 async def upload_to_youtube(video_path: str, title: str, description: str, tags: list[str]) -> dict:

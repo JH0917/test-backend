@@ -7,19 +7,13 @@ import time
 import uuid
 import httpx
 import anthropic
-import openai
-from runwayml import RunwayML
-from elevenlabs import ElevenLabs
 from moviepy import (
-    ImageClip,
     VideoFileClip,
-    AudioFileClip,
-    CompositeVideoClip,
     vfx,
 )
 import moviepy.audio.fx as afx
 from moviepy.audio.AudioClip import CompositeAudioClip
-from PIL import Image, ImageDraw, ImageFont
+from moviepy import AudioFileClip, CompositeVideoClip
 from shorts.audio_assets import get_or_generate_sfx, generate_bgm_loop
 
 import logging
@@ -30,9 +24,7 @@ from shorts.trend_analyzer import _parse_json_response
 logger = logging.getLogger("shorts.video_creator")
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
-RUNWAY_API_KEY = os.getenv("RUNWAY_API_KEY", "")
+MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY", "")
 EPISODE_HISTORY_PATH = os.getenv("EPISODE_HISTORY_PATH", "/app/episode_history.json")
 
 WIDTH = 720
@@ -53,177 +45,96 @@ def _load_episode_history() -> list[dict]:
     return []
 
 
-def _save_episode(title: str, description: str, keywords: str = "", question: str = ""):
+def _save_episode(title: str, description: str, topic: str = ""):
     """생성된 에피소드를 히스토리에 저장한다."""
     history = _load_episode_history()
-    entry = {"title": title, "description": description, "keywords": keywords}
-    if question:
-        entry["question"] = question
+    entry = {"title": title, "description": description, "topic": topic}
     history.append(entry)
     with open(EPISODE_HISTORY_PATH, "w") as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
 
 
 async def create_shorts_video() -> str:
-    """전역변수에서 주제를 읽어 20초 내외 쇼츠 영상을 생성한다. 생성된 파일 경로를 반환."""
+    """역사 IF 쇼츠 영상을 생성한다. 대사 없이 비주얼+SFX/BGM만."""
     global last_generated_script
 
-    if not trend_module.current_topic or not trend_module.current_topic_detail:
-        raise ValueError("주제가 설정되지 않았습니다. analyze_youtube_trends()를 먼저 실행하세요.")
+    if not trend_module.current_topic_detail:
+        raise ValueError("주제가 설정되지 않았습니다. analyze 먼저 실행하세요.")
 
-    script = await _generate_script(trend_module.current_topic, trend_module.current_topic_detail)
+    script = await _generate_script(trend_module.current_topic_detail)
     last_generated_script = script
 
-    tts_path = await _generate_tts(script["narration"])
-    image_paths = await _generate_scene_images(script["scenes"])
+    video_paths = await _generate_scene_videos(script["scenes"])
 
-    # DALL-E 전체 실패 시 영상 생성 중단 (까만 화면 영상 업로드 방지)
-    fallback_count = sum(1 for p in image_paths if "fallback" in os.path.basename(p))
-    if fallback_count == len(image_paths):
-        raise RuntimeError("DALL-E 이미지 전체 실패 — 영상 생성을 중단합니다. 크레딧을 확인하세요.")
+    # 전체 실패 시 중단
+    success_count = sum(1 for p in video_paths if p is not None)
+    if success_count == 0:
+        raise RuntimeError("MiniMax 영상 전체 실패 — 영상 생성을 중단합니다.")
 
-    scene_video_paths = await _generate_scene_videos(script["scenes"], image_paths)
-    video_path = await _compose_video(script, tts_path, scene_video_paths)
-
+    video_path = await _compose_video(script, video_paths)
     return video_path
 
 
-async def _generate_script(topic: str, detail: str) -> dict:
-    """Claude API로 영상 스크립트를 생성한다."""
+async def _generate_script(topic_detail: str) -> dict:
+    """Claude API로 장면 프롬프트를 생성한다. 대사 없이 비주얼 시나리오만."""
     history = _load_episode_history()
     episode_number = len(history) + 1
     last_title = history[-1]["title"] if history else "없음"
 
-    # 매 영상마다 다른 톤과 포맷을 랜덤 선택
-    tones = [
-        "단톡방에서 친구 저격하는 톤 — 짧고 얄밉게, 웃기면서 찔리게",
-        "새벽 커뮤 급발진 톤 — 과몰입해서 혼자 열받아 하는 느낌",
-        "예능 MC 톤 — 선택지마다 리액션 넣고 관객석 웃음 터뜨리기",
-        "참사 중계 톤 — 선택 직후 벌어지는 재앙을 뉴스 앵커처럼 전달",
-        "선배 톤 — 인생 경험 많은 척 조언하다가 본인도 못 고름",
-    ]
-    hooks = [
-        "잠깐. 이거 고르는 순간 단톡방에서 박제됩니다.",
-        "이건 밸런스게임이 아니라 인성검사입니다.",
-        "친구한테 물어봤다가 5분 동안 정적 흘렀습니다.",
-        "이건 고민하면 안 됩니다. 고민 자체가 위험합니다.",
-        "댓글창 터질 질문 가져왔습니다.",
-        "엄마 앞에서 설명해보세요. 못 하면 틀린 겁니다.",
-        "이거 잘못 고르면 사회적으로 끝납니다.",
-        "솔직히 이거 3초 안에 못 고르면 문제 있는 겁니다.",
-        "이 질문 만든 사람이 진짜 나쁜 사람입니다.",
-    ]
-    tone = random.choice(tones)
-    hook = random.choice(hooks)
+    # 히스토리에서 최근 사용된 주제들
+    recent_topics = [ep.get("topic", "") for ep in history[-20:]]
 
-    prompt = f"""당신은 유튜브 쇼츠 밸런스게임 콘텐츠 스크립트 작가입니다.
-조회수 100만 이상 바이럴 쇼츠만 만드는 전문가입니다.
+    prompt = f"""당신은 유튜브 쇼츠 "역사 IF" 영상 전문가입니다.
+"만약 ~했다면?" 이라는 가정으로, AI 실사급 영상만으로 스토리를 전달합니다.
+대사/나레이션/자막 없이, 영상만 보고도 "뭐야 이게?!" 하고 끝까지 보게 만들어야 합니다.
 
-⚠️ 질문: {detail}
+⚠️ 주제: {topic_detail}
 ⚠️ 에피소드: #{episode_number}
-⚠️ 직전 제목: "{last_title}" — 다른 패턴 사용!
-⚠️ 톤: {tone}
-⚠️ 첫 문장: "{hook}"
+⚠️ 직전 제목: "{last_title}" — 다른 느낌!
+
+## 최근 사용된 주제 (중복 방지)
+{chr(10).join(recent_topics[-10:]) if recent_topics else "없음"}
 
 ## 핵심 원칙
-이 영상은 "분석"이 아니라 "상황극"입니다.
-시청자가 웃는 건 논리가 아니라 "아 ㅋㅋㅋ 저건 진짜 망했다" 하는 장면입니다.
-매 문장이 새로운 그림을 그려야 합니다. 같은 말 반복하면 스와이프 당합니다.
+1. 첫 1초에 "뭐야?!" — 현실에서 절대 볼 수 없는 충격적 비주얼
+2. 대사 없이 영상만으로 스토리 전달 — 전 세계 누구나 이해
+3. 매 장면이 점점 더 극적으로 — 스케일 확대
+4. 마지막 장면에서 반전 또는 클라이맥스
 
-## ⚠️ 밸런스 필수 — 이것이 가장 중요합니다!
-양쪽 선택지를 동등하게 매력적이고 동등하게 끔찍하게 그려야 합니다.
-한쪽이 명백히 좋으면 시청자는 고민 없이 스와이프합니다.
-A의 장점을 보여줬으면 A의 치명적 단점도 반드시 보여주세요.
-B가 별로여 보이면 B의 숨겨진 핵심 장점을 부각하세요.
-댓글이 50:50으로 갈려야 성공입니다. 7:3이면 실패입니다.
+## 5컷 구조 (정확히 5장면, 각 6초)
+1. 🔥 훅: 현실과 비현실의 충돌 (예: 현대 도시에 공룡이 걸어다님)
+2. 📈 전개: 상황이 확대됨 (사람들의 반응, 세계의 변화)
+3. 💥 갈등: 예상치 못한 문제 발생 (충돌, 혼란, 위기)
+4. 🌋 클라이맥스: 가장 극적인 장면 (폭발, 대규모 변화)
+5. 🔄 엔딩: 반전 또는 여운 (마지막 숏으로 루프 유도)
 
-## 6컷 구조 (정확히 6장면, 더 넣지 말 것)
-1. 🔥 훅 + 질문: "{hook}" 후 바로 "A vs B. 결론 내드립니다."
-2. 😱 A 선택 시 벌어지는 현실 (웃긴 참사 장면 2~3개 빠르게)
-3. 💀 B 선택 시 벌어지는 현실 (A보다 더 극적인 참사)
-4. 🤔 양쪽 비교하며 갈등 (어? 근데 이거 은근 고민되는데?)
-5. ⚡ 결론 선언 — 확신에 찬 한마디 + 펀치라인
-6. 🔁 "여러분 선택은?" + 떡밥 (첫 장면 질문을 다시 상기시키며 루프)
+## 영상 프롬프트 가이드 (MiniMax T2V용)
+- 영어로 작성
+- 실사 영화 퀄리티: "photorealistic, cinematic lighting, 4K, movie quality"
+- 카메라 워크 반드시 포함: "slow pan", "dolly zoom", "aerial shot", "close-up tracking"
+- 구체적 디테일: 시간대, 날씨, 인물 표정, 배경 오브젝트
+- 동작 반드시 포함: 걷기, 달리기, 날기, 폭발 등
+- 금지: 텍스트, 자막, UI, 워터마크 언급
 
-## 재미 엔진 — 이걸 안 넣으면 영상이 죽습니다
-- 최소 3개의 "구체적 현실 장면" 필수:
-  소개팅에서 들킴, 단톡방 폭발, 엄마가 방문 열음, 회사 프레젠테이션 중, 지하철 옆사람 표정, 전애인 SNS에 올라감, 편의점 CCTV에 찍힘
-- 최소 2개의 "밈급 비유" 필수:
-  "인생 난이도 DLC", "사회적 사망 선고", "영혼 탈곡기", "멘탈 포맷", "인간관계 공장초기화"
-- 한쪽 팬 도발 필수: "B파 지금 화났죠?", "A 고른 사람 손?", "이거 고른 사람 진심?"
-
-## 참고 스크립트 (이 수준의 재미와 속도감을 반드시 따를 것!)
-
-참고1 (160자, 설렘 vs 안정):
-"이건 밸런스게임이 아니라 인성검사입니다. 평생 설렘 but 깊은 정 없음 vs 설렘 제로 but 가족 같은 안정. 결론 내드립니다. 평생 설렘요? 매일 심장 뜁니다. 근데 3년 지나도 '우리 사이 뭐야?' 이 질문이 끝이 없습니다. 옆에 있는데 외롭습니다. 안정감은요? 심장은 안 뜁니다. 근데 아프면 죽 끓여옵니다. 새벽에 울면 안아줍니다. 문제는 가끔 옆에 누가 있는지 잊어버립니다. 결론. 안정. 설렘은 3초인데 간호는 30년입니다. 설렘파 반박 오세요. 여러분 선택은?"
-
-참고2 (170자, 월 500 모욕 vs 월 200 가족):
-"댓글창 전쟁 예약입니다. 월 500인데 매일 인격모독 vs 월 200인데 동료가 가족. 결론 내드립니다. 월 500요? 통장은 두툽합니다. 근데 월요일마다 화장실에서 웁니다. 상사가 회의실에서 존재를 부정합니다. 퇴근하면 한강 뷰인데 눈물 뷰입니다. 월 200은요? 치킨은 반반 나눕니다. 월세가 빠듯합니다. 근데 생일에 서프라이즈 옵니다. 월요일이 안 무섭습니다. 결론. 월 200. 통장 잔고는 채워지는데 자존감은 충전 안 됩니다. 500파 솔직히 부럽죠? 여러분 선택은?"
-
-참고3 (150자, 거짓말 감지 vs 거짓말 완벽):
-"잠깐. 이거 고르는 순간 인생이 바뀝니다. 거짓말 100% 감지 vs 거짓말 100% 통함. 결론 내드립니다. 감지 능력요? 친구가 웃으면서 합니다. '아니 진짜 안 바빠.' 빨간불 뜹니다. 세상이 거짓말 천지인 걸 압니다. 우울해집니다. 통하는 능력은요? 면접 합격. 소개팅 성공. 근데 진심을 말해도 아무도 안 믿습니다. 진짜 사랑한다는 말도 의심받습니다. 결론. 감지. 진실이 아프지만 가짜 인생이 더 무섭습니다. 여러분 선택은?"
-
-참고4 (165자, 치킨 금지 vs 피자 금지):
-"이 질문 만든 사람 진짜 악마입니다. 치킨 평생 금지 vs 피자 평생 금지. 결론 내드립니다. 치킨 금지요? 치맥 끝납니다. 야식의 왕이 사라집니다. 회식 때 혼자 족발 시킵니다. 배달 앱 1위가 영원히 회색입니다. 피자 금지는요? 피자 없는 파티가 됩니다. 늦은 밤 치즈 늘어나는 그 장면 평생 못 봅니다. 근데 솔직히 피자 안 먹어도 삽니다. 치킨 없으면 한국인 자격 박탈입니다. 결론. 피자 금지. 치킨이 없는 금요일은 금요일이 아닙니다. 여러분 선택은?"
-
-참고5 (155자, 속마음 자막 vs 브금 랜덤):
-"솔직히 둘 다 사회적 사망입니다. 말할 때 속마음 자막 vs 걸을 때 브금 랜덤. 결론 내드립니다. 속마음 자막이요? 상사한테 '네 알겠습니다' 하는데 자막에 '아 제발 닥쳐' 뜹니다. 소개팅에서 '아 괜찮은데?' 자막 뜨는 순간 끝납니다. 브금은요? 장례식에서 EDM 터집니다. 면접 들어가는데 보스 브금 깔립니다. 근데 웃기잖아요. 자막은 인간관계 파괴인데 브금은 분위기 메이커입니다. 결론. 브금. 여러분 선택은?"
-
-## 문체 규칙
-- 한 문장 최대 25자! 이거 넘기면 지루합니다.
-- 문장 끝 다양하게: "끝.", "망.", "압수.", "박제.", "탈출 불가.", "바로 신고."
-- "~거든요" 3회 이상 반복 금지.
-- 설명 말고 장면. 근거 말고 그림. 착한 말 말고 댓글 폭탄.
-
-## 절대 금지
-- "자 일단", "잘 생각해보세요", "핵심은", "강력한 근거" — 이런 거 쓰면 채널 망합니다
-- 장황한 설명, 교훈, 양비론, 가짜 통계
-- "~이기 때문입니다", "~할 수 있습니다" 같은 문어체
-
-## 구성
-- 총 22~32초 영상 (나레이션 160~250자)
-- 정확히 6개 장면
-- 각 장면 3~5초
-- 각 장면에 화면 자막 텍스트 (8자 이내! 짧을수록 임팩트)
-- 각 장면에 DALL-E 이미지 프롬프트 (영어, 아래 스타일 가이드 참고)
-- 1번 장면: image_prompt_a + image_prompt_b (분할화면용)
-- 2~4번 장면: 상황극 장면 (표정, 리액션이 핵심!)
-- 5번 장면: 결론 (image_prompt는 "Pure black background"로 고정)
-- 6번 장면: 댓글 유도 (image_prompt는 "Pure black background"로 고정)
-- ⚠️ 5번과 6번 사이에 카운트다운이 자동 삽입됩니다
-
-## 이미지 프롬프트 스타일 가이드 (Pixar 3D 스타일!)
-- 모든 이미지는 "Pixar-style 3D animated" 느낌으로 작성
-- 캐릭터의 과장된 표정이 핵심: eyes popping out, jaw on the floor, tears streaming while laughing, comically horrified face
-- 색감: 밝고 채도 높은 컬러, 소프트 조명, 깨끗한 배경
-- 예시: "A cute Pixar-style 3D Korean office worker character with an extremely shocked expression, eyes bulging out, mouth wide open, sitting at a desk piled with documents, bright warm office lighting"
-- 추상적 배경 금지. 구체적 장소와 상황, 과장된 리액션이 있어야 함.
-- ⚠️ "photograph", "photo", "realistic" 같은 단어 절대 사용 금지!
-
-## 제목 규칙
-- 짧고 자극적. 30자 이내.
-- "이거 고르면 단톡방 박제됨", "엄마한테 설명 가능?", "댓글창 전쟁 예약"
-- 선택지 압축: "검색기록 vs 카톡", "10억 냄새 vs 0원 향기"
+## 제목 규칙 (영어+한국어 병행, 글로벌 타겟)
+- 영어 제목이 메인, 한국어 부제
+- 짧고 충격적: "What if dinosaurs never went extinct?"
+- 30자 이내 (영어 기준)
 
 다음 JSON으로만 응답:
 {{
-    "title": "제목 (30자 이내)",
-    "description": "설명 (80자 이내)",
-    "tags": ["밸런스게임", "양자택일", "shorts", "결론내드립니다", "쇼츠", ...],
-    "narration": "나레이션 (160~250자, 구어체, 반드시 한쪽 선택)",
+    "title": "영어 제목 | 한국어 부제",
+    "description": "영어 설명 (80자 이내)",
+    "tags": ["whatif", "history", "ai", "shorts", ...],
     "scenes": [
         {{
-            "text": "자막 (8자 이내)",
-            "duration": 4.0,
-            "image_prompt": "Pixar-style 3D animated ... (English)",
-            "image_prompt_a": "(1번만) A 이미지",
-            "image_prompt_b": "(1번만) B 이미지",
-            "motion_prompt": "동작 (English)"
+            "prompt": "Photorealistic cinematic ... (English, 상세한 영상 프롬프트, 최소 50단어)",
+            "duration": 6
         }}
     ]
 }}
 
-⚠️ 정확히 6개 장면! 1번만 image_prompt_a/b, 나머지는 image_prompt만!"""
+⚠️ 정확히 5개 장면! 각 장면 prompt는 최소 50단어로 상세하게!"""
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     message = await asyncio.to_thread(
@@ -235,499 +146,204 @@ B가 별로여 보이면 B의 숨겨진 핵심 장점을 부각하세요.
 
     script = _parse_json_response(message.content[0].text)
 
-    # 에피소드 번호 강제 삽입 (LLM이 누락한 경우 대비)
+    # 에피소드 번호 강제 삽입
     if f"#{episode_number}" not in script["title"]:
         script["title"] = f"#{episode_number} {script['title']}"
 
-    # LLM 출력 검증 (장면 수, 나레이션 길이)
+    # 검증
     scene_count = len(script.get("scenes", []))
-    if scene_count != 6:
-        logger.warning(f"장면 수 {scene_count}개 (기대: 6개)")
-    narration_len = len(script.get("narration", ""))
-    if not (140 <= narration_len <= 280):
-        logger.warning(f"나레이션 {narration_len}자 (기대: 160~250자)")
+    if scene_count != 5:
+        logger.warning(f"장면 수 {scene_count}개 (기대: 5개)")
     logger.info(f"생성된 제목: {script.get('title')}")
-    logger.info(f"생성된 나레이션: {script.get('narration')}")
 
     return script
 
 
-async def _generate_tts(narration: str) -> str:
-    """ElevenLabs TTS로 나레이션 음성을 생성한다."""
-    tts_path = os.path.join(tempfile.gettempdir(), f"shorts_narration_{uuid.uuid4().hex[:8]}.mp3")
+async def _generate_single_video(prompt: str, run_id: str, index: int) -> str | None:
+    """MiniMax API로 T2V 영상 1개를 생성한다."""
+    headers = {
+        "Authorization": f"Bearer {MINIMAX_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": "T2V-01",
+        "prompt": prompt,
+        "duration": 6,
+        "resolution": "720P",
+        "prompt_optimizer": True,
+    }
 
-    client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
-    audio_gen = await asyncio.to_thread(
-        client.text_to_speech.convert,
-        text=narration,
-        voice_id="m3gJBS8OofDJfycyA2Ip",  # Taehyung - Natural, Friendly and Clear
-        model_id="eleven_multilingual_v2",
-        voice_settings={
-            "stability": 0.2,
-            "similarity_boost": 0.7,
-            "style": 0.9,
-            "speed": 1.2,
-        },
-    )
-
-    with open(tts_path, "wb") as f:
-        for chunk in audio_gen:
-            f.write(chunk)
-    return tts_path
-
-
-async def _generate_single_image(client, prompt: str, style_suffix: str, run_id: str, label: str) -> str | None:
-    """DALL-E 이미지 1장을 생성한다."""
     try:
-        import base64 as b64module
-        full_prompt = f"{prompt}. {style_suffix}"
-        response = await asyncio.to_thread(
-            client.images.generate,
-            model="gpt-image-1",
-            prompt=full_prompt,
-            size="1024x1536",
-            quality="medium",
-            n=1,
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                "https://api.minimax.io/v1/video_generation",
+                headers=headers,
+                json=payload,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            if "task_id" not in data:
+                logger.error(f"MiniMax 장면 {index} task_id 없음: {data}")
+                return None
+
+            task_id = data["task_id"]
+            logger.info(f"MiniMax 장면 {index} 작업 시작: {task_id}")
+
+        # Polling (최대 5분)
+        poll_start = time.monotonic()
+        async with httpx.AsyncClient(timeout=30) as client:
+            while True:
+                if time.monotonic() - poll_start > 300:
+                    logger.error(f"MiniMax 장면 {index} 타임아웃 (300초)")
+                    return None
+
+                resp = await client.get(
+                    f"https://api.minimax.io/v1/query/video_generation?task_id={task_id}",
+                    headers={"Authorization": f"Bearer {MINIMAX_API_KEY}"},
+                )
+                result = resp.json()
+                status = result.get("status", "")
+
+                if status == "Success":
+                    file_id = result["file_id"]
+                    break
+                elif status == "Fail":
+                    logger.error(f"MiniMax 장면 {index} 실패: {result}")
+                    return None
+                else:
+                    await asyncio.sleep(10)
+
+        # 다운로드 URL 획득
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(
+                f"https://api.minimax.io/v1/files/retrieve?file_id={file_id}",
+                headers={"Authorization": f"Bearer {MINIMAX_API_KEY}"},
+            )
+            download_url = resp.json()["file"]["download_url"]
+
+        # 영상 다운로드
+        video_path = os.path.join(
+            tempfile.gettempdir(), f"shorts_minimax_{run_id}_{index}.mp4"
         )
-        img_b64 = response.data[0].b64_json
-        path = os.path.join(tempfile.gettempdir(), f"shorts_dalle_{run_id}_{label}.png")
-        with open(path, "wb") as f:
-            f.write(b64module.b64decode(img_b64))
-        return path
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.get(download_url)
+            with open(video_path, "wb") as f:
+                f.write(resp.content)
+
+        logger.info(f"MiniMax 장면 {index} 완료: {video_path}")
+        return video_path
+
     except Exception as e:
-        logger.error(f"DALL-E {label} 생성 실패: {e}")
+        logger.error(f"MiniMax 장면 {index} 실패: {e}")
         return None
 
 
-def _create_split_screen(img_a_path: str, img_b_path: str, question: str, run_id: str) -> str:
-    """A vs B 분할화면 이미지를 생성한다. 상단=A, 하단=B, 중앙=VS."""
-    half_h = HEIGHT // 2
-
-    # A 이미지 (상단) - 주황 틴트
-    img_a = Image.open(img_a_path).convert("RGBA").resize((WIDTH, half_h), Image.LANCZOS)
-    orange_tint = Image.new("RGBA", (WIDTH, half_h), (255, 140, 0, 50))
-    img_a = Image.alpha_composite(img_a, orange_tint)
-
-    # B 이미지 (하단) - 파랑 틴트
-    img_b = Image.open(img_b_path).convert("RGBA").resize((WIDTH, half_h), Image.LANCZOS)
-    blue_tint = Image.new("RGBA", (WIDTH, half_h), (0, 100, 255, 50))
-    img_b = Image.alpha_composite(img_b, blue_tint)
-
-    # 합성
-    canvas = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 255))
-    canvas.paste(img_a, (0, 0))
-    canvas.paste(img_b, (0, half_h))
-
-    draw = ImageDraw.Draw(canvas)
-
-    # 중앙 분할선 + VS 배지
-    divider_y = half_h
-    draw.rectangle([0, divider_y - 4, WIDTH, divider_y + 4], fill=(255, 255, 255, 200))
-
-    # VS 원형 배지
-    vs_radius = 50
-    cx, cy = WIDTH // 2, divider_y
-    draw.ellipse(
-        [cx - vs_radius, cy - vs_radius, cx + vs_radius, cy + vs_radius],
-        fill=(220, 30, 30, 255),
-        outline=(255, 255, 255, 255),
-        width=4,
-    )
-
-    # VS 텍스트
-    font = _load_font(48)
-    bbox = draw.textbbox((0, 0), "VS", font=font)
-    vs_w = bbox[2] - bbox[0]
-    vs_h = bbox[3] - bbox[1]
-    draw.text((cx - vs_w // 2, cy - vs_h // 2), "VS", font=font, fill=(255, 255, 255, 255))
-
-    # A/B 라벨
-    label_font = _load_font(36)
-    draw.text((30, 30), "A", font=label_font, fill=(255, 200, 50, 255))
-    draw.text((30, half_h + 30), "B", font=label_font, fill=(100, 180, 255, 255))
-
-    path = os.path.join(tempfile.gettempdir(), f"shorts_split_{run_id}.png")
-    canvas.convert("RGB").save(path)
-    return path
-
-
-def _load_font(size: int):
-    """한글 폰트를 로드한다."""
-    font_paths = [
-        "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
-        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
-        "/usr/share/fonts/noto/NotoSansCJK-Bold.ttc",
-    ]
-    for fp in font_paths:
-        if os.path.exists(fp):
-            return ImageFont.truetype(fp, size)
-    return ImageFont.load_default()
-
-
-def _create_countdown_frames(run_id: str) -> list[str]:
-    """2, 1 카운트다운 이미지 프레임을 생성한다."""
-    frames = []
-    colors = [(255, 80, 80), (80, 255, 80)]  # 빨-초
-
-    for i, (num, color) in enumerate(zip([2, 1], colors)):
-        img = Image.new("RGB", (WIDTH, HEIGHT), (15, 15, 25))
-        draw = ImageDraw.Draw(img)
-
-        # 큰 숫자
-        font = _load_font(240)
-        text = str(num)
-        bbox = draw.textbbox((0, 0), text, font=font)
-        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        x, y = (WIDTH - tw) // 2, (HEIGHT - th) // 2 - 50
-
-        # 글로우 효과
-        for offset in range(8, 0, -2):
-            draw.text((x - offset, y), text, font=font, fill=color)
-            draw.text((x + offset, y), text, font=font, fill=color)
-        draw.text((x, y), text, font=font, fill=(255, 255, 255))
-
-        # "결론 공개" 텍스트
-        sub_font = _load_font(44)
-        sub_text = "결론 공개"
-        sb = draw.textbbox((0, 0), sub_text, font=sub_font)
-        sw = sb[2] - sb[0]
-        draw.text(((WIDTH - sw) // 2, y + th + 40), sub_text, font=sub_font, fill=(200, 200, 200))
-
-        path = os.path.join(tempfile.gettempdir(), f"shorts_countdown_{run_id}_{i}.png")
-        img.save(path)
-        frames.append(path)
-
-    return frames
-
-
-async def _generate_scene_images(scenes: list[dict]) -> list[str]:
-    """DALL-E로 각 장면의 배경 이미지를 생성한다. 첫 장면은 A/B 분할화면."""
+async def _generate_scene_videos(scenes: list[dict]) -> list[str | None]:
+    """MiniMax T2V로 각 장면의 영상을 생성한다."""
     run_id = uuid.uuid4().hex[:8]
-    image_paths = []
 
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
-    style_suffix = (
-        "Pixar-style 3D animated character render. "
-        "Bright, saturated colors with soft studio lighting. "
-        "Cute but expressive characters with HUGE exaggerated facial expressions: "
-        "wide eyes, dropped jaw, crying-laughing, extreme shock, comical horror. "
-        "Smooth plastic-like skin texture, large glossy eyes, slightly oversized head. "
-        "Clean colorful background with bokeh or gradient. "
-        "Disney/Pixar movie quality rendering, 4K detail. "
-        "No text, no letters, no watermarks, no UI elements in the image."
-    )
-
-    for i, scene in enumerate(scenes):
-        if i == 0 and scene.get("image_prompt_a") and scene.get("image_prompt_b"):
-            # 첫 장면: A/B 분할화면
-            img_a = await _generate_single_image(client, scene["image_prompt_a"], style_suffix, run_id, "0a")
-            img_b = await _generate_single_image(client, scene["image_prompt_b"], style_suffix, run_id, "0b")
-
-            if img_a and img_b:
-                split_path = _create_split_screen(img_a, img_b, scene.get("text", ""), run_id)
-                image_paths.append(split_path)
-            elif img_a:
-                image_paths.append(img_a)
-            elif img_b:
-                image_paths.append(img_b)
-            else:
-                image_paths.append(_create_fallback_background(run_id, i))
-        else:
-            # 일반 장면
-            path = await _generate_single_image(
-                client, scene.get("image_prompt", "abstract colorful background"),
-                style_suffix, run_id, str(i),
-            )
-            image_paths.append(path or _create_fallback_background(run_id, i))
-
-    return image_paths
-
-
-async def _generate_scene_videos(scenes: list[dict], image_paths: list[str]) -> list[str]:
-    """Runway Gen-4 Turbo로 각 장면의 이미지를 영상으로 변환한다."""
-    run_id = uuid.uuid4().hex[:8]
-    video_paths = []
-
-    runway_client = RunwayML(api_key=RUNWAY_API_KEY)
-
-    for i, (scene, img_path) in enumerate(zip(scenes, image_paths)):
-        try:
-            # 이미지를 data URI로 변환
-            import base64
-            with open(img_path, "rb") as f:
-                img_data = base64.b64encode(f.read()).decode()
-            ext = img_path.rsplit(".", 1)[-1]
-            mime = "image/png" if ext == "png" else "image/jpeg"
-            data_uri = f"data:{mime};base64,{img_data}"
-
-            motion_prompt = scene.get("motion_prompt", scene.get("image_prompt", "gentle camera movement"))
-            motion_prompt = f"Cinematic motion, dynamic and expressive. {motion_prompt}"
-
-            task = await asyncio.to_thread(
-                runway_client.image_to_video.create,
-                model="gen4_turbo",
-                prompt_image=data_uri,
-                prompt_text=motion_prompt,
-                ratio="720:1280",
-                duration=5,
-            )
-
-            logger.info(f"Runway 장면 {i} 작업 시작: {task.id}")
-
-            # 완료까지 polling (최대 5분)
-            poll_start = time.monotonic()
-            while True:
-                if time.monotonic() - poll_start > 300:
-                    raise RuntimeError(f"Runway 장면 {i} 타임아웃 (300초)")
-                task_detail = await asyncio.to_thread(
-                    runway_client.tasks.retrieve, task.id
-                )
-                if task_detail.status == "SUCCEEDED":
-                    video_url = task_detail.output[0]
-                    video_path = os.path.join(
-                        tempfile.gettempdir(), f"shorts_runway_{run_id}_{i}.mp4"
-                    )
-                    async with httpx.AsyncClient(timeout=120) as http_client:
-                        resp = await http_client.get(video_url)
-                        with open(video_path, "wb") as f:
-                            f.write(resp.content)
-                    video_paths.append(video_path)
-                    logger.info(f"Runway 장면 {i} 완료")
-                    break
-                elif task_detail.status in ("FAILED", "CANCELED"):
-                    raise RuntimeError(f"Runway 실패: {task_detail.status}")
-                await asyncio.sleep(5)
-
-        except Exception as e:
-            logger.error(f"Runway 장면 {i} 실패, 이미지 폴백: {e}")
-            video_paths.append(img_path)  # 실패 시 이미지로 폴백
-
-    return video_paths
-
-
-def _create_fallback_background(run_id: str, index: int) -> str:
-    """DALL-E 실패 시 단색 배경을 생성한다."""
-    img = Image.new("RGB", (WIDTH, HEIGHT), (30, 30, 50))
-    path = os.path.join(tempfile.gettempdir(), f"shorts_fallback_{run_id}_{index}.jpg")
-    img.save(path)
-    return path
-
-
-def _create_text_image(text: str, run_id: str, index: int, total_scenes: int = 6,
-                       width: int = WIDTH, height: int = HEIGHT) -> str:
-    """PIL로 텍스트가 들어간 반투명 오버레이 이미지를 생성한다.
-    자막 위치가 장면마다 다양하게 변경된다."""
-    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-
-    # 첫 프레임은 더 큰 폰트, 마지막 2개도 큰 폰트 (결론/댓글유도)
-    is_first = index == 0
-    is_conclusion = index >= total_scenes - 2
-    font_size = 88 if (is_first or is_conclusion) else 72
-    font = _load_font(font_size)
-
-    if not text:
-        path = os.path.join(tempfile.gettempdir(), f"shorts_text_{run_id}_{index}.png")
-        img.save(path)
-        return path
-
-    bbox = draw.textbbox((0, 0), text, font=font)
-    text_w = bbox[2] - bbox[0]
-    text_h = bbox[3] - bbox[1]
-    x = (width - text_w) // 2
-
-    # 자막 위치 다양화: 장면 인덱스에 따라 상단/중앙/하단 순환
-    positions = [
-        height - text_h - 200,       # 하단 (기본)
-        120,                          # 상단
-        (height - text_h) // 2,       # 중앙
-        height - text_h - 200,        # 하단
-        120,                          # 상단
-        (height - text_h) // 2,       # 중앙
-        (height - text_h) // 2 + 100, # 중앙 아래
-        (height - text_h) // 2,       # 중앙
+    # 병렬 생성
+    tasks = [
+        _generate_single_video(scene["prompt"], run_id, i)
+        for i, scene in enumerate(scenes)
     ]
-    y = positions[index % len(positions)]
-
-    padding = 32
-    if is_first:
-        # 첫 프레임: 강렬한 빨강 + 네온 효과
-        draw.rounded_rectangle(
-            [x - padding, y - padding, x + text_w + padding, y + text_h + padding],
-            radius=24, fill=(220, 20, 20, 230),
-        )
-    elif is_conclusion:
-        # 결론/댓글 유도: 네온 블루
-        draw.rounded_rectangle(
-            [x - padding, y - padding, x + text_w + padding, y + text_h + padding],
-            radius=24, fill=(20, 80, 220, 230),
-        )
-    else:
-        # 일반 장면: 검정 반투명 + 테두리
-        draw.rounded_rectangle(
-            [x - padding, y - padding, x + text_w + padding, y + text_h + padding],
-            radius=20, fill=(0, 0, 0, 200),
-        )
-        draw.rounded_rectangle(
-            [x - padding, y - padding, x + text_w + padding, y + text_h + padding],
-            radius=20, outline=(255, 255, 255, 100), width=2,
-        )
-
-    # 두꺼운 외곽선 + 흰색 글씨
-    for dx, dy in [(-3, -3), (-3, 3), (3, -3), (3, 3), (-3, 0), (3, 0), (0, -3), (0, 3)]:
-        draw.text((x + dx, y + dy), text, font=font, fill=(0, 0, 0, 230))
-    draw.text((x, y), text, font=font, fill=(255, 255, 255, 255))
-
-    path = os.path.join(tempfile.gettempdir(), f"shorts_text_{run_id}_{index}.png")
-    img.save(path)
-    return path
+    results = await asyncio.gather(*tasks)
+    return list(results)
 
 
-async def _compose_video(script: dict, tts_path: str, scene_paths: list[str]) -> str:
-    """MoviePy로 영상을 합성한다. BGM/SFX 믹싱 + 카운트다운 삽입."""
+async def _compose_video(script: dict, scene_paths: list[str | None]) -> str:
+    """MoviePy로 영상을 합성한다. 대사 없이 BGM + SFX만."""
     run_id = uuid.uuid4().hex[:8]
     output_path = os.path.join(tempfile.gettempdir(), f"shorts_output_{run_id}.mp4")
-    tts_audio = AudioFileClip(tts_path)
-    tts_duration = tts_audio.duration
 
     scenes = script["scenes"]
-    total_scenes = len(scenes)
+    valid_paths = [(i, p) for i, p in enumerate(scene_paths) if p is not None]
 
-    # 카운트다운 2초를 포함한 전체 길이 계산
-    countdown_duration = 2.0
-    total_video_duration = tts_duration + countdown_duration
+    if not valid_paths:
+        raise RuntimeError("합성할 영상 클립이 없습니다.")
 
-    # 장면별 시간 비율 계산 (카운트다운 제외)
-    total_scene_duration = sum(s["duration"] for s in scenes)
-    ratio = tts_duration / total_scene_duration if total_scene_duration > 0 else 1
-
-    # 카운트다운 삽입 위치: 결론 장면(마지막에서 2번째) 직전
-    countdown_insert_idx = total_scenes - 2
-
-    fade_duration = 0.2  # 빠른 컷을 위해 페이드 줄임
     clips = []
     current_time = 0
-
-    # === SFX 타이밍 기록용 ===
+    fade_duration = 0.3
     sfx_timestamps = {
-        "impact": 0.0,       # 후킹 시점
-        "whoosh_times": [],   # 장면 전환마다
-        "ding": None,         # 결론 시점
+        "impact": 0.0,
+        "whoosh_times": [],
     }
 
-    for i, scene in enumerate(scenes):
-        duration = scene["duration"] * ratio
-        path = scene_paths[i] if i < len(scene_paths) else scene_paths[-1]
+    for idx, (scene_idx, path) in enumerate(valid_paths):
+        target_duration = scenes[scene_idx]["duration"]
 
-        # 영상 파일이면 VideoFileClip, 이미지면 ImageClip (폴백)
-        if path.endswith(".mp4"):
-            bg = VideoFileClip(path).resized((WIDTH, HEIGHT))
-            if bg.duration < duration:
-                slow_factor = bg.duration / duration
-                bg = bg.with_effects([vfx.MultiplySpeed(slow_factor)])
-            bg = bg.subclipped(0, min(duration, bg.duration))
-        else:
-            bg_raw = ImageClip(path).resized((int(WIDTH * 1.15), int(HEIGHT * 1.15))).with_duration(duration)
-            if i % 2 == 0:
-                bg_zoomed = bg_raw.resized(lambda t, d=duration: 1 + 0.12 * (t / d))
-            else:
-                bg_zoomed = bg_raw.resized(lambda t, d=duration: 1.12 - 0.12 * (t / d))
-            bg_zoomed = bg_zoomed.with_position("center")
-            bg = CompositeVideoClip([bg_zoomed], size=(WIDTH, HEIGHT)).with_duration(duration)
+        clip = VideoFileClip(path).resized((WIDTH, HEIGHT))
 
-        # 빠른 크로스페이드 (effects를 한번에 전달하여 덮어쓰기 방지)
+        # 클립 길이 조정
+        if clip.duration > target_duration:
+            clip = clip.subclipped(0, target_duration)
+        elif clip.duration < target_duration:
+            slow_factor = clip.duration / target_duration
+            clip = clip.with_effects([vfx.MultiplySpeed(slow_factor)])
+            clip = clip.subclipped(0, target_duration)
+
+        # 크로스페이드
         fade_effects = []
-        if i > 0:
+        if idx > 0:
             fade_effects.append(vfx.CrossFadeIn(fade_duration))
-        if i < total_scenes - 1:
+        if idx < len(valid_paths) - 1:
             fade_effects.append(vfx.CrossFadeOut(fade_duration))
         if fade_effects:
-            bg = bg.with_effects(fade_effects)
+            clip = clip.with_effects(fade_effects)
 
-        text_img_path = _create_text_image(scene["text"], run_id, i, total_scenes)
-        text_overlay = ImageClip(text_img_path).with_duration(bg.duration)
+        clip = clip.with_start(current_time)
+        clips.append(clip)
 
-        composite = CompositeVideoClip([bg, text_overlay], size=(WIDTH, HEIGHT))
-        composite = composite.with_start(current_time)
-        clips.append(composite)
-
-        # SFX 타이밍 기록
-        if i > 0:
+        # SFX 타이밍
+        if idx > 0:
             sfx_timestamps["whoosh_times"].append(current_time)
-        if i == total_scenes - 2:
-            sfx_timestamps["ding"] = current_time
 
-        if i < total_scenes - 1:
-            current_time += bg.duration - fade_duration
+        if idx < len(valid_paths) - 1:
+            current_time += clip.duration - fade_duration
         else:
-            current_time += bg.duration
+            current_time += clip.duration
 
-        # 카운트다운 삽입
-        if i == countdown_insert_idx - 1:
-            countdown_frames = _create_countdown_frames(run_id)
-            for ci, frame_path in enumerate(countdown_frames):
-                cd_clip = ImageClip(frame_path).with_duration(1.0)
-                if ci == 0:
-                    cd_clip = cd_clip.with_effects([vfx.CrossFadeIn(0.15)])
-                cd_clip = cd_clip.with_start(current_time)
-                clips.append(cd_clip)
-                current_time += 1.0
-            sfx_timestamps["countdown_start"] = current_time - countdown_duration
+    total_duration = current_time
 
-    # === 오디오 믹싱: TTS + BGM + SFX ===
+    # === 오디오 믹싱: BGM + SFX (대사 없음) ===
     audio_clips = []
 
-    # 1. TTS (메인 음성)
-    audio_clips.append(tts_audio)
-
-    # 2. BGM (낮은 볼륨)
+    # 1. BGM (메인 — 대사 없으므로 볼륨 높임)
     try:
-        bgm_path = generate_bgm_loop(duration=total_video_duration + 5)
-        bgm = AudioFileClip(bgm_path).with_effects([afx.MultiplyVolume(0.15)])
-        if bgm.duration > total_video_duration:
-            bgm = bgm.subclipped(0, total_video_duration)
+        bgm_path = generate_bgm_loop(duration=total_duration + 5)
+        bgm = AudioFileClip(bgm_path).with_effects([afx.MultiplyVolume(0.5)])
+        if bgm.duration > total_duration:
+            bgm = bgm.subclipped(0, total_duration)
         audio_clips.append(bgm)
     except Exception as e:
-        logger.warning(f"BGM 로드 실패 (영상은 정상 생성): {e}")
+        logger.warning(f"BGM 로드 실패: {e}")
 
-    # 3. SFX
+    # 2. SFX
     try:
         sfx = get_or_generate_sfx()
 
         # 후킹 임팩트 (0초)
-        impact = AudioFileClip(sfx["impact"]).with_effects([afx.MultiplyVolume(0.5)])
+        impact = AudioFileClip(sfx["impact"]).with_effects([afx.MultiplyVolume(0.6)])
         impact = impact.with_start(0.0)
         audio_clips.append(impact)
 
         # 장면 전환 whoosh
         for wt in sfx_timestamps["whoosh_times"][:5]:
-            whoosh = AudioFileClip(sfx["whoosh"]).with_effects([afx.MultiplyVolume(0.3)])
+            whoosh = AudioFileClip(sfx["whoosh"]).with_effects([afx.MultiplyVolume(0.4)])
             whoosh = whoosh.with_start(wt)
             audio_clips.append(whoosh)
 
-        # 카운트다운 틱 — 드럼롤로 대체 (짧은 틱 클립은 MoviePy CompositeAudioClip에서 IOError 발생)
-        if "countdown_start" in sfx_timestamps:
-            drumroll = AudioFileClip(sfx["drumroll"]).with_effects([afx.MultiplyVolume(0.4)])
-            cd_start = sfx_timestamps["countdown_start"]
-            # 드럼롤 끝 2초만 사용
-            if drumroll.duration > 2.0:
-                drumroll = drumroll.subclipped(drumroll.duration - 2.0, drumroll.duration)
-            drumroll = drumroll.with_start(cd_start)
-            audio_clips.append(drumroll)
-
-        # 결론 딩
-        if sfx_timestamps["ding"] is not None:
-            ding = AudioFileClip(sfx["ding"]).with_effects([afx.MultiplyVolume(0.5)])
-            ding = ding.with_start(sfx_timestamps["ding"])
-            audio_clips.append(ding)
-
     except Exception as e:
-        logger.warning(f"SFX 로드 실패 (영상은 정상 생성): {e}")
+        logger.warning(f"SFX 로드 실패: {e}")
 
     # 최종 합성
-    mixed_audio = CompositeAudioClip(audio_clips)
-    final = CompositeVideoClip(clips, size=(WIDTH, HEIGHT)).with_duration(total_video_duration)
-    final = final.with_audio(mixed_audio)
+    final = CompositeVideoClip(clips, size=(WIDTH, HEIGHT)).with_duration(total_duration)
+
+    if audio_clips:
+        mixed_audio = CompositeAudioClip(audio_clips)
+        final = final.with_audio(mixed_audio)
 
     await asyncio.to_thread(
         final.write_videofile,
@@ -739,14 +355,17 @@ async def _compose_video(script: dict, tts_path: str, scene_paths: list[str]) ->
         logger=None,
     )
 
-    tts_audio.close()
+    # 리소스 정리
     for ac in audio_clips:
         try:
             ac.close()
         except Exception:
             pass
     for clip in clips:
-        clip.close()
+        try:
+            clip.close()
+        except Exception:
+            pass
     final.close()
 
     return output_path
